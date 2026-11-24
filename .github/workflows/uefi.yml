@@ -41,7 +41,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor/edk2-mtk
-          key: edk2-mtk-${{ runner.os }}-${{ hashFiles('scripts/fetch_deps.sh') }}
+          key: edk2-mtk-v2-${{ runner.os }}-${{ hashFiles('scripts/fetch_deps.sh') }}
 
       - name: Fetch edk2-mtk
         run: ./scripts/fetch_deps.sh

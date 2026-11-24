@@ -95,6 +95,10 @@ if [[ -d /usr/aarch64-linux-gnu/include ]]; then
   export CPATH="${CPATH:+$CPATH:}/usr/aarch64-linux-gnu/include"
 fi
 
+# Always rebuild BaseTools from scratch.  CI caches the whole edk2-mtk checkout,
+# and a half-written cached GenFw binary segfaults nondeterministically on
+# module conversion, which is much more confusing than a 30-second rebuild.
+make -C "$EDK2_DIR/Common/edk2/BaseTools" clean >/dev/null 2>&1 || true
 make -C "$EDK2_DIR/Common/edk2/BaseTools" -j"$JOBS"
 
 # shellcheck disable=SC1091
