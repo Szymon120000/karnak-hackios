@@ -1,0 +1,38 @@
+name: rootfs
+
+# Validates the disk-image tooling on every change.  The actual Darwin rootfs
+# is built on macOS from an IPSW; here we only prove the GPT container is
+# standards-compliant and that the payload lands where we say it does.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "rootfs/**"
+      - ".github/workflows/rootfs.yml"
+
+jobs:
+  container:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unit tests
+        run: python3 rootfs/test_mkrootfs.py
+
+      - name: Build a smoke image and validate it with sgdisk
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gdisk
+          python3 rootfs/mkrootfs.py -o out/rootfs.img -s 512M
+          python3 rootfs/mkrootfs.py --inspect out/rootfs.img
+          sgdisk --verify out/rootfs.img
+          test "$(stat -c %s out/rootfs.img)" = "$((512 * 1024 * 1024))"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rootfs-container
+          path: out/rootfs.img
+          retention-days: 7
