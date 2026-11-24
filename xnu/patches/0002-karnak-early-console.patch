@@ -1,0 +1,138 @@
+diff --git a/pexpert/arm/pe_init.c b/pexpert/arm/pe_init.c
+index 04dda53..f1f0893 100644
+--- a/pexpert/arm/pe_init.c
++++ b/pexpert/arm/pe_init.c
+@@ -25,6 +25,9 @@
+ 
+ /* extern references */
+ extern void     pe_identify_machine(boot_args *bootArgs);
++#if defined(ARM64_BOARD_CONFIG_KARNAK)
++extern void     karnak_board_early_init(boot_args *args);
++#endif
+ 
+ /* static references */
+ static void     pe_prepare_images(void);
+@@ -427,6 +430,9 @@ PE_init_platform(boolean_t vm_initialized, void *args)
+ 	} else {
+ 		pe_arm_init_interrupts(args);
+ 		pe_arm_init_debug(args);
++#if defined(ARM64_BOARD_CONFIG_KARNAK)
++		karnak_board_early_init(boot_args_ptr);
++#endif
+ 	}
+ 
+ 	if (!vm_initialized) {
+diff --git a/pexpert/arm/pe_serial.c b/pexpert/arm/pe_serial.c
+index 997a4ab..f33a57c 100644
+--- a/pexpert/arm/pe_serial.c
++++ b/pexpert/arm/pe_serial.c
+@@ -25,6 +25,9 @@
+ #include <pexpert/device_tree.h>
+ #include <pexpert/arm/consistent_debug.h>
+ #include <pexpert/arm64/board_config.h>
++#ifdef KARNAK_UART
++#include <pexpert/arm64/karnak_early.h>
++#endif /* KARNAK_UART */
+ #include <arm64/proc_reg.h>
+ #include <pexpert/arm/protos.h>
+ #include <kern/sched_prim.h>
+@@ -591,6 +594,57 @@ SECURITY_READ_ONLY_LATE(static struct pe_serial_functions) pi3_uart_serial_funct
+ 
+ /*****************************************************************************/
+ 
++#ifdef KARNAK_UART
++
++/*
++ * karnak: MT8163 UART0 is a 16550-compatible port.  LK has already set it to
++ * 921600 8N1, so init only re-points the polled driver at the mapping that
++ * serial_init() creates once the VM is up.
++ */
++static void
++karnak_uart_init(void)
++{
++}
++
++static unsigned int
++karnak_uart_tr0(void)
++{
++	return karnak_early_tx_ready();
++}
++
++static void
++karnak_uart_td0(uint8_t c)
++{
++	karnak_early_putc(c);
++}
++
++static unsigned int
++karnak_uart_rr0(void)
++{
++	return karnak_early_rx_ready();
++}
++
++static uint8_t
++karnak_uart_rd0(void)
++{
++	int c = karnak_early_getc();
++	return (c < 0) ? 0 : (uint8_t)c;
++}
++
++SECURITY_READ_ONLY_LATE(static struct pe_serial_functions) karnak_uart_serial_functions =
++{
++	.init = karnak_uart_init,
++	.transmit_ready = karnak_uart_tr0,
++	.transmit_data = karnak_uart_td0,
++	.receive_ready = karnak_uart_rr0,
++	.receive_data = karnak_uart_rd0,
++	.device = SERIAL_KARNAK_UART
++};
++
++#endif /* KARNAK_UART */
++
++/*****************************************************************************/
++
+ #ifdef VMAPPLE_UART
+ 
+ static vm_offset_t vmapple_uart0_base_vaddr = 0;
+@@ -769,6 +823,17 @@ serial_init(void)
+ 		return 1;
+ 	}
+ 
++#ifdef KARNAK_UART
++	{
++		/* MT8163 has a single UART; the address is fixed in the DTS. */
++		vm_offset_t karnak_uart = ml_io_map((vm_offset_t)KARNAK_UART0_PA, 0x1000);
++		if (karnak_uart != 0) {
++			karnak_early_set_mmio_base((unsigned long)karnak_uart);
++			register_serial_functions(&karnak_uart_serial_functions);
++		}
++	}
++#endif /* KARNAK_UART */
++
+ 	soc_base = pe_arm_get_soc_base_phys();
+ 
+ 	if (soc_base == 0) {
+diff --git a/pexpert/conf/files.arm64 b/pexpert/conf/files.arm64
+index 20b9ae7..1f7b947 100644
+--- a/pexpert/conf/files.arm64
++++ b/pexpert/conf/files.arm64
+@@ -5,3 +5,5 @@ pexpert/arm/pe_identify_machine.c      standard
+ pexpert/arm/pe_init.c                  standard
+ pexpert/arm/pe_kprintf.c               standard
+ pexpert/arm/pe_serial.c                standard
++pexpert/arm64/board_mt8163.c           standard
++pexpert/arm64/karnak_early.c           standard
+diff --git a/pexpert/pexpert/arm/protos.h b/pexpert/pexpert/arm/protos.h
+index 404b50b..2fd05e6 100644
+--- a/pexpert/pexpert/arm/protos.h
++++ b/pexpert/pexpert/arm/protos.h
+@@ -47,7 +47,8 @@ typedef enum serial_device {
+ 	SERIAL_DOCKCHANNEL=0x2,
+ 	SERIAL_PI3_UART=0x4,
+ 	SERIAL_VMAPPLE_UART=0x8,
+-	SERIAL_DCC_UART=0x10
++	SERIAL_DCC_UART=0x10,
++	SERIAL_KARNAK_UART=0x20
+ } serial_device_t;
+ 
+ kern_return_t serial_irq_enable(serial_device_t device);

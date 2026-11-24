@@ -10,7 +10,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-#include "pexpert/pexpert/arm64/KARNAK.h"
+#include <pexpert/arm64/KARNAK.h>
 
 /* Mirror the generated values (include/karnak/hardware_map.h). */
 #define HW_GICD_BASE   0x10221000U

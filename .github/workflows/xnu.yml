@@ -1,16 +1,22 @@
 name: xnu-board
 
-# Manual only: the full XNU build needs macOS + an Apple KDK and the rest of
-# the patch series does not exist yet (see xnu/README.md).  This workflow
-# proves that the karnak board constants are self-consistent and match the
-# generated hardware map.
+# The full kernel build still needs macOS + an Apple KDK (the `kernel` job is
+# manual).  The host jobs prove that the board constants are self-consistent
+# and that the board patch series still applies to the pinned XNU tag.
 
 on:
   workflow_dispatch:
+    inputs:
+      build_kernel:
+        description: "Run the macOS kernel build (not wired up yet)"
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths:
       - "xnu/**"
+      - "tools/apply_xnu_patches.py"
+      - "scripts/stage_xnu.sh"
       - "platform/edk2/XnuLoaderPkg/**"
       - ".github/workflows/xnu.yml"
 
@@ -23,10 +29,22 @@ jobs:
       - name: Compile and run board header test
         run: |
           gcc -std=c11 -Wall -Wextra -Werror \
-              -I xnu/overlay \
+              -I xnu/overlay/pexpert \
               xnu/tests/board_static_test.c \
               -o /tmp/board_static_test
           /tmp/board_static_test
+
+      - name: Compile and run early console tests
+        run: |
+          # The polled UART driver is compiled for the host with a simulated
+          # 16550 (KARNAK_EARLY_HOST_TEST), so its register access, CRLF
+          # translation and stuck-transmitter bail-out are actually exercised.
+          gcc -std=c11 -Wall -Wextra -Werror -DKARNAK_EARLY_HOST_TEST \
+              -I xnu/overlay/pexpert \
+              xnu/tests/karnak_early_test.c \
+              xnu/overlay/pexpert/arm64/karnak_early.c \
+              -o /tmp/karnak_early_test
+          /tmp/karnak_early_test
 
       - name: Compile and run Mach-O parser tests
         run: |
@@ -50,6 +68,28 @@ jobs:
               platform/edk2/XnuLoaderPkg/Library/KarnakBootArgsLib/KarnakBootArgsLib.c \
               -o /tmp/boot_args_test
           /tmp/boot_args_test
+
+  patch-series:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the pinned XNU and stage karnak support
+        run: ./scripts/stage_xnu.sh
+
+      - name: Verify the staged tree
+        run: |
+          set -e
+          grep -q 'MACHINE_FLAGS_ARM64_KARNAK' vendor/xnu/makedefs/MakeInc.def
+          grep -q 'ARM64_BOARD_CONFIG_KARNAK' vendor/xnu/pexpert/pexpert/arm64/board_config.h
+          grep -q 'KARNAK_UART' vendor/xnu/pexpert/arm/pe_serial.c
+          grep -q 'karnak_early.c' vendor/xnu/pexpert/conf/files.arm64
+          test -f vendor/xnu/pexpert/pexpert/arm64/KARNAK.h
+          test -f vendor/xnu/pexpert/arm64/board_mt8163.c
+
+      - name: Re-run the stage (must be idempotent)
+        run: ./scripts/stage_xnu.sh
 
   kernel:
     runs-on: macos-14

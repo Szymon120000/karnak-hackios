@@ -72,7 +72,8 @@ CI runs the v4 build and the host tests on every push
 include/karnak/          generated hardware map (header + JSON sidecar)
 tools/extract_karnak_hw.py  DTS -> hardware map generator
 platform/edk2/KarnakPkg/ EDK2 platform package (UEFI, BootShim, drivers)
-xnu/                     XNU board overlay and patch series
+xnu/                     XNU board overlay, early console and patch series
+                         (scripts/stage_xnu.sh applies it to the pinned tag)
 rootfs/                  disk-backed rootfs tooling
 scripts/                 fetch/stage/probe/build helpers
 docs/                    hardware citations and status

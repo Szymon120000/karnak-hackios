@@ -12,6 +12,15 @@ This directory contains:
 
 - `overlay/pexpert/pexpert/arm64/KARNAK.h` — board constants, standalone and
   host-testable (`tests/board_static_test.c`).
+- `overlay/pexpert/arm64/karnak_early.{c,h}` — polled UART0 console.  It
+  inherits LK's 921600 8N1 setup and uses the physical address until the UART
+  is mapped; `tests/karnak_early_test.c` runs it against a simulated 16550.
+- `overlay/pexpert/arm64/board_mt8163.c` — `karnak_board_early_init()`, called
+  from `PE_init_platform(TRUE)`: maps UART0 and prints the boot `boot_args`
+  facts (DTB pointer/length, memory size, framebuffer geometry).
+- `patches/` — the upstream edits.  `0001` selects the board (machine config,
+  `board_config.h`, cache-line size); `0002` adds the early console to
+  `files.arm64` and calls it from `pe_init.c`/`pe_serial.c`.
 - `include/pexpert/...` — vendored xnu-8796 arm64 `boot.h` used only by the
   host test that asserts the firmware `boot_args` layout (see the README there).
 - `tests/boot_args_test.c` — verifies `KarnakBootArgsLib` (in XnuLoaderPkg)
@@ -61,12 +70,30 @@ reuse the rest of the series.
 7. **Rootfs**: HFS+ image on eMMC (see `rootfs/`), or the userspace bundle
    from an IPSW.
 
-## Building (when the patches exist)
+## Staging the source
 
-Use the same approach as `ios-sweet/.github/workflows/xnu.yml`: fetch
-`blacktop/darwin-xnu-build`, drop our patch series into `dxb/patches/`, and
-build on a macOS runner with a KDK.  Xcode 15 (macos-14) is required for the
-iig/IORPC ABI of xnu-8796.
+```sh
+scripts/stage_xnu.sh            # fetch the pinned tag into vendor/xnu and apply
+scripts/stage_xnu.sh --check    # non-destructive validation (CI)
+```
 
-`xnu.yml` in this repository is a **manual** workflow that runs the host-side
-board test; it does not claim to produce a kernel yet.
+The script pins `xnu-8796.141.3` (`1b191cb58250d0705d8a51287127505aa4bc0789`),
+copies `xnu/overlay/` over the tree and applies `xnu/patches/*.patch` through
+`tools/apply_xnu_patches.py`.  Both steps are idempotent, and the patcher
+refuses a tree that is at the wrong revision or in a partial state.  CI runs
+the real staging and then re-runs it to prove idempotence.
+
+## Building the kernel
+
+The full build still needs macOS + a KDK.  The intended path is the same as
+`ios-sweet/.github/workflows/xnu.yml`: fetch `blacktop/darwin-xnu-build`, put
+the staged source (or the patch series) into `dxb`, and build with
+`MACHINE_CONFIG=KARNAK` on a macOS runner.  Xcode 15 (macos-14) is required
+for the iig/IORPC ABI of xnu-8796.
+
+`xnu.yml` in this repository runs the host-side board, early-console,
+boot_args and Mach-O tests plus the patch-series check.  Its `kernel` job is
+manual and does not claim to produce a kernel yet: the GICv2, timer, SMP and
+MSDC0 work listed above is still missing.  `xnu/patches/0002` prints a banner
+before any of that, which is the first thing a real hardware attempt should
+show on UART0.

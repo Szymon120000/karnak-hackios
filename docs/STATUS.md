@@ -31,10 +31,16 @@
 
 ## Not implemented / unverified
 
-- **XNU**: only the board header and patch scaffolding exist. A bootable XNU
-  needs the full sweet/beyond2lte patch series adapted to MT8163 (GICv2,
-  A53 errata, no UFS, MSDC0 instead of UFS, different PMIC). Tracked in
-  `xnu/README.md`.
+- **XNU**: the board is selectable (`ARM64_BOARD_CONFIG_KARNAK`, machine config
+  and patch series in `xnu/patches/`), a polled UART0 early console exists and
+  is host-tested, and `karnak_board_early_init()` prints the boot `boot_args`.
+  A bootable XNU still needs the GICv2 driver, the architected-timer wiring,
+  SMP/PSCI, A53 errata handling and an MSDC0 block driver (no UFS on this SoC).
+  Tracked in `xnu/README.md`.
+- **XNU patch series**: `scripts/stage_xnu.sh` fetches the pinned
+  `xnu-8796.141.3` tag, copies the overlay and applies two reviewed patches;
+  CI stages a real tree and re-runs the staging to prove idempotence.  The
+  patches apply cleanly but have not been compiled by an XNU build yet.
 - **XnuLoader**: the Mach-O parser, a `boot_args` builder (`KarnakBootArgsLib`,
   layout asserted against Apple's xnu-8796 arm64 header) and a validation-only
   application exist; it prints the segment map and a `boot_args` preview from
