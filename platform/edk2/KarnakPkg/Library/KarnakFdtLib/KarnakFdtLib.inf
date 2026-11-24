@@ -1,0 +1,27 @@
+/** @file
+  Karnak FDT helper library.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+**/
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = KarnakFdtLib
+  FILE_GUID                      = 1E7C4B9A-6D20-4C7E-9F31-8A5B2C4D6E01
+  MODULE_TYPE                    = BASE
+  VERSION_STRING                 = 1.0
+  LIBRARY_CLASS                  = KarnakFdtLib
+
+[Sources]
+  KarnakFdtLib.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  KarnakPkg/KarnakPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  PcdLib
+
+[FixedPcd]
+  gKarnakPkgTokenSpaceGuid.PcdDeviceTreeStore
+  gKarnakPkgTokenSpaceGuid.PcdDtbStoreSize

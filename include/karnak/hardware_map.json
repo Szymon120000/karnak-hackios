@@ -1,0 +1,103 @@
+{
+  "bootargs": "console=ttyS0,921600n1 root=/dev/ram initrd=0x44000200,0x200000",
+  "cpu": {
+    "clusters": 1,
+    "compatible": "arm,cortex-a53",
+    "cores": 4,
+    "release_addr": 1073742336
+  },
+  "display": {
+    "bpp": 32,
+    "fb_reserve_bytes": 16777216,
+    "fb_top_fallback": 1608515584,
+    "format": "BGRA8888 (LK simple framebuffer, 32bpp)",
+    "height": 1280,
+    "note": "Live fb_base/vram/lcmname are in /chosen:atag,videolfb. UEFI and XnuLoader must read that property.",
+    "panel": "800x1280 portrait; Fire OS UI is rotated to 1280x800",
+    "stride": 3200,
+    "width": 800
+  },
+  "dram": {
+    "base": 1073741824,
+    "dts_end": 1610612736,
+    "dts_size": 536870912,
+    "note": "The build-time DTB describes 512 MiB at 0x40000000. LK may patch /memory at boot; the boot shim therefore reads the runtime DTB and never trusts this value alone.",
+    "product_size": 1610612736
+  },
+  "gic": {
+    "cpu_interface": {
+      "base": 270671872,
+      "size": 4096
+    },
+    "distributor": {
+      "base": 270667776,
+      "size": 4096
+    },
+    "hyp_interface": {
+      "base": 270688256,
+      "size": 8192
+    },
+    "max_irq": 987,
+    "type": "GIC-400 (GICv2)",
+    "virtual_interface": {
+      "base": 270680064,
+      "size": 8192
+    }
+  },
+  "mmc": {
+    "mmc0": {
+      "base": 287506432,
+      "irq": 79,
+      "size": 4096
+    },
+    "mmc1": {
+      "base": 287571968,
+      "irq": 80,
+      "size": 4096
+    }
+  },
+  "reserved": {
+    "atf": {
+      "base": 1124073472,
+      "size": 196608
+    },
+    "consys": {
+      "alignment": 2097152,
+      "size": 2097152
+    },
+    "mdump": {
+      "base": 1271922688,
+      "size": 3145728
+    },
+    "ram_console": {
+      "base": 1145044992,
+      "size": 2097152
+    }
+  },
+  "source": {
+    "dts": "arch/arm64/boot/dts/karnak.dts",
+    "dtsi": "arch/arm64/boot/dts/mt8163.dtsi",
+    "kernel": "karnak-kernel-3.18"
+  },
+  "timer": {
+    "frequency_hz": 13000000,
+    "ppi_hyp": 26,
+    "ppi_non_secure_physical": 30,
+    "ppi_secure_physical": 29,
+    "ppi_virtual": 27
+  },
+  "uart": {
+    "uart0": {
+      "base": 285220864,
+      "clock_hz": 26000000,
+      "irq": 91,
+      "size": 4096
+    },
+    "uart1": {
+      "base": 285224960,
+      "clock_hz": 26000000,
+      "irq": 92,
+      "size": 4096
+    }
+  }
+}

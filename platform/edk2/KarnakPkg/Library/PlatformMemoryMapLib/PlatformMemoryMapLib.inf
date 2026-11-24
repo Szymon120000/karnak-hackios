@@ -1,0 +1,28 @@
+/** @file
+  karnak memory map library.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+**/
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = PlatformMemoryMapLib
+  FILE_GUID                      = 6B0C1A52-7E34-4D89-A4B3-9C2D1E5F7082
+  MODULE_TYPE                    = BASE
+  VERSION_STRING                 = 1.0
+  LIBRARY_CLASS                  = PlatformMemoryMapLib
+
+[Sources]
+  PlatformMemoryMapLib.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  ArmPkg/ArmPkg.dec
+  EmbeddedPkg/EmbeddedPkg.dec
+  MediaTekPkg/MediaTekPkg.dec
+  KarnakPkg/KarnakPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  BaseMemoryLib
+  KarnakFdtLib
+  PcdLib

@@ -1,0 +1,90 @@
+name: uefi
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "platform/**"
+      - "include/**"
+      - "scripts/**"
+      - "tools/**"
+      - ".github/workflows/uefi.yml"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: uefi-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  firmware:
+    name: Build KarnakPkg UEFI + boot.img
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential uuid-dev nasm iasl \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            python3 python3-pip python3-venv python3-libfdt \
+            git make
+          python3 -m pip install --user --upgrade pip
+          python3 -m pip install --user \
+            edk2-pytool-extensions edk2-pytool-library mkbootimg
+
+      - name: Put pip entry points on PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Cache edk2-mtk checkout
+        uses: actions/cache@v4
+        with:
+          path: vendor/edk2-mtk
+          key: edk2-mtk-next-${{ runner.os }}
+
+      - name: Fetch edk2-mtk
+        run: ./scripts/fetch_deps.sh
+
+      - name: Stage KarnakPkg
+        run: ./scripts/stage_edk2.sh vendor/edk2-mtk
+
+      - name: Build BaseTools
+        working-directory: vendor/edk2-mtk
+        run: make -C Common/edk2/BaseTools -j"$(nproc)"
+
+      - name: Build platform
+        working-directory: vendor/edk2-mtk
+        run: python3 Platform/Amazon/KarnakPkg/PlatformBuild.py TARGET=RELEASE
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p out
+          cp -v vendor/edk2-mtk/Build/karnak/RELEASE_CLANG38/FV/KARNAK_UEFI.fd \
+                out/uefi-karnak.fd || true
+          cp -v vendor/edk2-mtk/Build/karnak/RELEASE_CLANG38/FV/KARNAK_UEFI.fd.shimmed \
+                out/uefi-karnak.fd.shimmed || true
+          cp -v vendor/edk2-mtk/out/boot-karnak.img out/uefi-karnak.img || true
+          ls -lh out
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: karnak-uefi
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: karnak-uefi-buildlogs
+          path: |
+            vendor/edk2-mtk/Build/karnak/**/BuildReport.log
+            vendor/edk2-mtk/Build/karnak/**/*.log
+          if-no-files-found: ignore
+          retention-days: 7

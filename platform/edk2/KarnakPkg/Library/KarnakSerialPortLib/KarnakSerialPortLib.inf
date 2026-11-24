@@ -1,0 +1,25 @@
+/** @file
+  karnak UART0 serial port library.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+**/
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = KarnakSerialPortLib
+  FILE_GUID                      = 3F6B2D80-51C4-4A9E-B7D2-6C8E0F1A3B95
+  MODULE_TYPE                    = BASE
+  VERSION_STRING                 = 1.0
+  LIBRARY_CLASS                  = SerialPortLib
+
+[Sources]
+  KarnakSerialPortLib.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  KarnakPkg/KarnakPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  PcdLib
+
+[FixedPcd]
+  gKarnakPkgTokenSpaceGuid.PcdKarnakUartBase

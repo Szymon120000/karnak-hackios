@@ -1,0 +1,31 @@
+# vendor trees and build outputs are not part of this repository
+vendor/
+out/
+build/
+Build/
+Conf/
+
+# reference checkouts used while developing
+karnak-kernel-3.18/
+android_kernel_amazon_karnak/
+edk2-mtk/
+beyond2lte-ios/
+ios-sweet/
+Szymon120000/
+
+# build products
+*.o
+*.d
+*.elf
+*.bin
+*.fd
+*.fd.shimmed
+*.img
+*.dtb
+*.gz
+
+# editor / OS noise
+.DS_Store
+*.swp
+__pycache__/
+*.pyc

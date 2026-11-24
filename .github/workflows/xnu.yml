@@ -1,0 +1,39 @@
+name: xnu-board
+
+# Manual only: the full XNU build needs macOS + an Apple KDK and the rest of
+# the patch series does not exist yet (see xnu/README.md).  This workflow
+# proves that the karnak board constants are self-consistent and match the
+# generated hardware map.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "xnu/**"
+      - ".github/workflows/xnu.yml"
+
+jobs:
+  board-header:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and run board header test
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror \
+              -I xnu/overlay \
+              xnu/tests/board_static_test.c \
+              -o /tmp/board_static_test
+          /tmp/board_static_test
+
+  kernel:
+    runs-on: macos-14
+    timeout-minutes: 120
+    if: ${{ inputs.build_kernel == true }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Explain
+        run: |
+          echo "::warning::Kernel build is not wired up yet; see xnu/README.md"
+          exit 1

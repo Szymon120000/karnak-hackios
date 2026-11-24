@@ -1,0 +1,51 @@
+# Project status
+
+## What is implemented
+
+- **Hardware map**: generated from Amazon's 3.18 DTS. `--check` mode makes CI
+  fail if it drifts from the sources.
+- **KarnakBootShim** (`platform/edk2/KarnakPkg/BootShim/BootShim.S`):
+  - preserves LK's `x0` DTB pointer,
+  - copies a validated blob to `0x4fe00000` (bounded to 1 MiB),
+  - publishes the pointer at `0x4ff00000`,
+  - relocates the appended FD to `0x50000000` and branches.
+- **EDK2 `KarnakPkg`**:
+  - GIC-400/GICv2, 13 MHz architected timer (INTID 29/30/27/26),
+  - runtime memory map from the saved DTB (falls back to the DTS floor),
+  - `DtPlatformDxe` fed by `KarnakDtbLoaderLib`,
+  - UART0 console at 921600 (LK-configured),
+  - SimpleFbDxe, watchdog kicker, shell, FAT, USB, RamDisk.
+- **CI**: `uefi.yml` builds `out/uefi-karnak.img` on every push.
+
+## Not implemented / unverified
+
+- **XNU**: only the board header and patch scaffolding exist. A bootable XNU
+  needs the full sweet/beyond2lte patch series adapted to MT8163 (GICv2,
+  A53 errata, no UFS, MSDC0 instead of UFS, different PMIC). Tracked in
+  `xnu/README.md`.
+- **XnuLoader**: design notes only; no UEFI application yet.
+- **Disk-backed rootfs**: `rootfs/` is a placeholder; no image is produced.
+- **Touch/display panel drivers**: the panel is driven by LK; XNU framebuffer
+  output is not yet wired.
+- **PMIC/GPIO**: `MtkGpioImplLib` and `PmicWrapperImplLib` are bound to the
+  MT6789 instances so the DSC is complete, but the drivers are not in the FV.
+  A real MT8163 + MT6323 port is required for battery/keys.
+- **DRAM size**: see `docs/HARDWARE.md`. Until a live DTB proves 1.5 GB, treat
+  512 MiB as the safe floor.
+
+## Boot chain checkpoints
+
+When serial logging works, the expected markers are:
+
+```
+KarnakBootShim: ...
+Karnak: DT <n> bytes at 0x4fe00000
+Karnak: DT <n> bytes, 1 DRAM range(s), <size> MiB total
+Karnak: framebuffer 0x... + 0x...
+```
+
+## Safety
+
+Writing a boot image to `boot` on a locked device bricks it. Unlock first and
+keep a known-good boot image. This repository never touches the device
+automatically.
