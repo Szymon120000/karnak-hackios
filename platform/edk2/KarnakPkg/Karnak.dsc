@@ -10,7 +10,7 @@
 ##
 
 [Defines]
-  PLATFORM_NAME                  = Karnak
+  PLATFORM_NAME                  = karnak
   PLATFORM_GUID                  = C1D8A54B-9B02-4E1F-8B7E-6D5C4A3B2F10
   PLATFORM_VERSION               = 0.1
   DSC_SPECIFICATION              = 0x00010019
@@ -41,8 +41,6 @@
   gEmbeddedTokenSpaceGuid.PcdPrePiStackSize|0x00040000
   gMediaTekTokenSpaceGuid.PcdUefiMemPoolBase|0x50850000
   gMediaTekTokenSpaceGuid.PcdUefiMemPoolSize|0x02000000
-  gArmPlatformTokenSpaceGuid.PcdCPUCoresStackBase|0x52800000
-  gArmPlatformTokenSpaceGuid.PcdCPUCorePrimaryStackSize|0x00020000
 
   # ---- GIC-400 (DTS interrupt-controller@10221000) --------------------
   gArmTokenSpaceGuid.PcdGicDistributorBase|0x10221000
@@ -75,11 +73,13 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemRevision|0x00000850
 
 [LibraryClasses.common]
-  # Override the generic MediaTek choices with karnak-specific instances.
-  SerialPortLib|KarnakPkg/Library/KarnakSerialPortLib/KarnakSerialPortLib.inf
   PlatformPeiLib|KarnakPkg/Library/PlatformPeiLib/PlatformPeiLib.inf
   PlatformPrePiLib|KarnakPkg/Library/PlatformPrePiLib/PlatformPrePiLib.inf
   PlatformMemoryMapLib|KarnakPkg/Library/PlatformMemoryMapLib/PlatformMemoryMapLib.inf
+
+[LibraryClasses.common.DXE_DRIVER]
+  # More specific than the MediaTekCommonDsc.inc mapping, so this overrides it
+  # without redefining the common library class.
   DtPlatformDtbLoaderLib|KarnakPkg/Library/KarnakDtbLoaderLib/KarnakDtbLoaderLib.inf
 
   # MT8163 has an MT6323 PMIC and a different GPIO controller; those drivers

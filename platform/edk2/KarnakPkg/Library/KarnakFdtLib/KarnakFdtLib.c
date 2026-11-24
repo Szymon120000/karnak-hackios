@@ -196,7 +196,6 @@ KarnakFdtParse (
   )
 {
   CONST UINT8 *Blob;
-  CONST UINT8 *Struct;
   CONST UINT8 *Strings;
   UINT32       Total;
   UINT32       Off;
@@ -222,7 +221,6 @@ KarnakFdtParse (
   Total       = FdtBe32 (Blob + 4);
   Off         = FdtBe32 (Blob + 8);
   Strings     = Blob + FdtBe32 (Blob + 12);
-  Struct      = Blob;
   StructEnd   = Off + FdtBe32 (Blob + 36);
   StringsSize = FdtBe32 (Blob + 32);
 

@@ -23,6 +23,9 @@ KarnakInfoDxeEntry (
   KARNAK_FDT_INFO Info;
   UINT32          Index;
 
+  (VOID)ImageHandle;
+  (VOID)SystemTable;
+
   if (!KarnakFdtAvailable ()) {
     DEBUG ((DEBUG_WARN,
             "Karnak: boot shim did not publish a device tree\n"));
