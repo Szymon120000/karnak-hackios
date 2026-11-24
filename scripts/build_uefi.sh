@@ -88,18 +88,36 @@ if new != text:
     print(f"tools_def: removed LTO from {n} CLANG38 AARCH64 flag line(s)")
 PY
 
-# Some vendor modules pull in <arm_neon.h>, which includes the target libc's
-# <stdint.h>.  Point clang at the aarch64 sysroot when the distro provides one
-# (Debian/Ubuntu: libc6-dev-arm64-cross).
-if [[ -d /usr/aarch64-linux-gnu/include ]]; then
-  export CPATH="${CPATH:+$CPATH:}/usr/aarch64-linux-gnu/include"
-fi
-
 # Always rebuild BaseTools from scratch.  CI caches the whole edk2-mtk checkout,
 # and a half-written cached GenFw binary segfaults nondeterministically on
 # module conversion, which is much more confusing than a 30-second rebuild.
-make -C "$EDK2_DIR/Common/edk2/BaseTools" clean >/dev/null 2>&1 || true
-make -C "$EDK2_DIR/Common/edk2/BaseTools" -j"$JOBS"
+#
+# BaseTools are *host* (x86-64) binaries.  Anything added to CPATH for the
+# AARCH64 cross build would also be searched when compiling them, so clear the
+# include-path environment here; a leaked /usr/aarch64-linux-gnu/include makes
+# the host gcc parse aarch64 glibc headers and fail on NEON types.
+#
+# Newer host compilers add warnings that BaseTools' -Werror escalates (e.g.
+# gcc 16's -Wunused-but-set-variable in StringFuncs.c).  BaseTools is vendored
+# third-party code, so keep the warnings visible but do not fail on them.
+HOST_CFLAGS="-Wno-error=unused-but-set-variable -Wno-error=format-overflow"
+HOST_CFLAGS="$HOST_CFLAGS -Wno-error=stringop-overflow -Wno-error=array-bounds"
+# The bundled Pccts parser generator uses K&R prototypes, which gcc >= 14
+# (C23) rejects.  Pin the host C dialect to gnu17 for the whole BaseTools build.
+HOST_CC="${HOST_CC:-gcc} -std=gnu17"
+env -u CPATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH \
+  make -C "$EDK2_DIR/Common/edk2/BaseTools" clean >/dev/null 2>&1 || true
+env -u CPATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH \
+  make -C "$EDK2_DIR/Common/edk2/BaseTools" -j"$JOBS" \
+  BUILD_CC="$HOST_CC" EXTRA_OPTFLAGS="$HOST_CFLAGS"
+
+# Clang has no sysroot configured by default, so point it at the aarch64 libc
+# when the distro provides one (Debian/Ubuntu: libc6-dev-arm64-cross).  GCC5
+# already knows its sysroot, so this is only needed for the clang toolchain and
+# is exported after the host BaseTools build for the AARCH64 compilation.
+if [[ "$TOOLCHAIN" == CLANG38* && -d /usr/aarch64-linux-gnu/include ]]; then
+  export CPATH="${CPATH:+$CPATH:}/usr/aarch64-linux-gnu/include"
+fi
 
 # shellcheck disable=SC1091
 set +u
@@ -136,6 +154,10 @@ python3 "$EDK2_DIR/Platform/Amazon/KarnakPkg/Tools/mkbootimg.py" \
   --header_version 4 \
   --kernel "$ROOT/out/uefi-karnak.fd" \
   --output "$ROOT/out/uefi-karnak.img"
+
+# Structural check: boot header, shim payload offset and FV checksum.
+python3 "$ROOT/tools/check_boot_image.py" "$ROOT/out/uefi-karnak.img" \
+  --fd-size "$FD_SIZE"
 
 echo
 ls -lh "$ROOT/out"

@@ -120,6 +120,20 @@ def lcm_dimensions(kernel: pathlib.Path) -> dict[str, int]:
     return found
 
 
+def source_label(kernel: pathlib.Path) -> str:
+    """Stable, checkout-location-independent name for generated comments.
+
+    The drift check compares generated text byte-for-byte, so the label must
+    not depend on whether the caller passed a relative or absolute --kernel.
+    """
+    try:
+        return kernel.resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        # The kernel tree normally lives beside this repository, so use its
+        # directory name rather than an absolute path that changes per checkout.
+        return kernel.resolve().name
+
+
 def extract(kernel: pathlib.Path) -> dict:
     with tempfile.TemporaryDirectory(prefix="karnak-dt-") as td:
         blob = compile_dts(kernel, pathlib.Path(td) / "karnak.dtb")
@@ -183,7 +197,7 @@ def extract(kernel: pathlib.Path) -> dict:
 
     return {
         "source": {
-            "kernel": str(kernel),
+            "kernel": source_label(kernel),
             "dts": "arch/arm64/boot/dts/karnak.dts",
             "dtsi": "arch/arm64/boot/dts/mt8163.dtsi",
         },
