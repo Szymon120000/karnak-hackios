@@ -40,7 +40,8 @@ Python `libfdt` (only for regenerating the hardware map).
 ```
 
 The build drives EDK2's `build` tool directly; no `edk2-pytool`/`stuart`
-environment is required.
+environment is required.  It uses the `GCC5` toolchain by default (the one
+MediaTek's tree is tested with); set `TOOLCHAIN=CLANG38` to try clang.
 
 Output:
 

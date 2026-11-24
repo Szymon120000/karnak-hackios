@@ -1,0 +1,21 @@
+/** @file
+  Mach-O 64 parser library for XnuLoader.
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+**/
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = XnuImageLib
+  FILE_GUID                      = 9F1A2C34-6D7E-4A8B-9C0D-1E2F3A4B5C6D
+  MODULE_TYPE                    = BASE
+  VERSION_STRING                 = 1.0
+  LIBRARY_CLASS                  = XnuImageLib
+
+[Sources]
+  XnuImageLib.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+
+[LibraryClasses]
+  BaseMemoryLib

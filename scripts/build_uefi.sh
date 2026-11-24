@@ -15,6 +15,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EDK2_DIR="$ROOT/vendor/edk2-mtk"
 TARGET="${1:-${TARGET:-DEBUG}}"
+# GCC5 is the toolchain MediaTek's tree is validated against and produces ELF
+# that this BaseTools' GenFw converts reliably.  CLANG38 remains available
+# (TOOLCHAIN=CLANG38) but older clang/lld output has been seen to crash GenFw
+# on at least one module.
+TOOLCHAIN="${TOOLCHAIN:-GCC5}"
 JOBS="${JOBS:-$(nproc)}"
 
 # Firmware layout, must match include/karnak/hardware_map.h.
@@ -42,6 +47,7 @@ export EDK_TOOLS_PATH="$EDK2_DIR/Common/edk2/BaseTools"
 export PYTHON_COMMAND="${PYTHON_COMMAND:-python3}"
 export CLANG38_BIN="${CLANG38_BIN:-/usr/bin/}"
 export CLANG38_AARCH64_PREFIX="${CLANG38_AARCH64_PREFIX:-aarch64-linux-gnu-}"
+export GCC5_AARCH64_PREFIX="${GCC5_AARCH64_PREFIX:-aarch64-linux-gnu-}"
 export CONF_PATH="${CONF_PATH:-$EDK2_DIR/Conf}"
 
 # edk2 expects a workspace-level Conf/ with the toolchain templates.
@@ -100,13 +106,13 @@ cd "$EDK2_DIR"
 build \
   -p KarnakPkg/Karnak.dsc \
   -a AARCH64 \
-  -t CLANG38 \
+  -t "$TOOLCHAIN" \
   -b "$TARGET" \
   -n "$JOBS" \
   -D "FD_BASE=$FD_BASE" \
   -D "FD_SIZE=$FD_SIZE"
 
-OUT="$EDK2_DIR/Build/karnak/${TARGET}_CLANG38/FV"
+OUT="$EDK2_DIR/Build/karnak/${TARGET}_${TOOLCHAIN}/FV"
 FD="$OUT/KARNAK_UEFI.fd"
 [[ -f "$FD" ]] || { echo "error: $FD was not produced" >&2; exit 1; }
 

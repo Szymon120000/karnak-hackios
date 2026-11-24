@@ -11,6 +11,7 @@ on:
     branches: [main]
     paths:
       - "xnu/**"
+      - "platform/edk2/XnuLoaderPkg/**"
       - ".github/workflows/xnu.yml"
 
 jobs:
@@ -26,6 +27,16 @@ jobs:
               xnu/tests/board_static_test.c \
               -o /tmp/board_static_test
           /tmp/board_static_test
+
+      - name: Compile and run Mach-O parser tests
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror \
+              -I xnu/tests/hostshim \
+              -I platform/edk2/XnuLoaderPkg/Include \
+              xnu/tests/xnu_image_test.c \
+              platform/edk2/XnuLoaderPkg/Library/XnuImageLib/XnuImageLib.c \
+              -o /tmp/xnu_image_test
+          /tmp/xnu_image_test
 
   kernel:
     runs-on: macos-14
