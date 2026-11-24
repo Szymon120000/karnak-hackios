@@ -10,6 +10,14 @@ records the loadable segments, computes the file/VM footprint on 16 KiB
 granularity, and checks a proposed physical destination against reserved
 ranges.  Its tests live in `xnu/tests/xnu_image_test.c` and run in CI.
 
+`KarnakBootArgsLib` builds the ARM64 `boot_args` block.  The layout comes from
+Apple's `pexpert/pexpert/arm64/boot.h` (xnu-8796.141.3), vendored under
+`xnu/include`; `xnu/tests/boot_args_test.c` asserts every field offset and the
+736-byte size against that copy before the firmware build is allowed to use it.
+It fills the block but does not exit boot services or branch.  The loader also
+prints a *preview* built from the shim's saved DTB, which proves the pointer and
+the layout on real hardware without risking a half-built handoff.
+
 `Application/XnuLoader` is built by `Karnak.dsc` but **not** placed in the FV.
 It opens `\xnu\kernelcache` on the boot volume, runs it through the parser and
 prints the segment map, then returns `EFI_UNSUPPORTED`.  That makes the file
@@ -36,12 +44,14 @@ KarnakPkg guarantees, before `XnuLoader.efi` runs:
    `filesize`, `maxprot/initprot`.
 4. Reject any segment that intersects a firmware reservation or the DTB copy
    window (`0x4fe00000..0x50000000`).
-5. Build the XNU `boot_args` structure:
-   - `MemoryMap` / `MemoryMapSize` from `GetMemoryMap`,
-   - `DeviceTree` pointer and `DeviceTreeLength`,
+5. Build the XNU `boot_args` structure (ARM64 has no memory-map array in it;
+   XNU learns memory from the device tree):
+   - `DeviceTree` pointer and `DeviceTreeLength` (the shim's copy),
    - `Video` (base, width, height, stride, depth) from the GOP / DTB,
    - `CommandLine` from `\xnu\bootargs` or a built-in string,
-   - `TopOfKernelData`, `PhysicalMemorySize` from the memory map.
+   - `PhysBase`, `MemSize`, `MemSizeActual`, `TopOfKernelData` from the live
+     memory map.  `KarnakBootArgsLib` implements and validates the block; the
+     values still need to come from the memory map instead of the DTS floor.
 6. `ExitBootServices`, disable the MMU/caches, copy segments to their link
    addresses, and branch to the entry point with `x0 = &boot_args`.
 
@@ -62,10 +72,13 @@ the `ios-sweet/shim/start.S` handoff.
 
 - `beyond2lte-ios/uefi/XnuLoader/` — Exynos 9820 loader (GICv2, 16K pages).
 - `ios-sweet/shim/` — bare-metal arm64 entry, MMU setup, FDT parsing.
-- `xnu/osfmk/arm64/boot.h` and `pexpert/pexpert/arm64/boot.h` — `boot_args`.
+- `xnu/include/pexpert/pexpert/arm64/boot.h` — vendored `boot_args` layout
+  with provenance and license notes in `xnu/include/README.md`.
 
 ## Why it is not in the FV yet
 
-`Karnak.fdf` intentionally omits `XnuLoader` until the Mach-O parser and
-`boot_args` builder are complete and host-tested.  The firmware can still be
-flashed and exercised (shell, DT dump, framebuffer) today.
+`Karnak.fdf` intentionally omits `XnuLoader` until the `ExitBootServices` /
+MMU-off entry path is implemented.  The parser and the `boot_args` builder are
+complete and host-tested, so the remaining work is the handoff and the XNU board
+port.  The firmware can still be flashed and exercised (shell, DT dump,
+framebuffer) today.

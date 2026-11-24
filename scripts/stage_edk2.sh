@@ -32,4 +32,10 @@ mkdir -p "$DST/Docs"
 cp "$ROOT/include/karnak/hardware_map.h" "$DST/Docs/"
 cp "$ROOT/include/karnak/hardware_map.json" "$DST/Docs/"
 
+# XnuLoader includes the same header; its package is copied separately, so put
+# a copy on that package's include path.
+mkdir -p "$EDK2_DIR/Platform/Amazon/XnuLoaderPkg/Include/karnak"
+cp "$ROOT/include/karnak/hardware_map.h" \
+  "$EDK2_DIR/Platform/Amazon/XnuLoaderPkg/Include/karnak/"
+
 echo "staged $DST"

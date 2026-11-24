@@ -22,8 +22,10 @@
   UefiApplicationEntryPoint
   UefiBootServicesTableLib
   UefiLib
+  BaseLib
   BaseMemoryLib
   MemoryAllocationLib
+  KarnakBootArgsLib
   XnuImageLib
 
 [Protocols]

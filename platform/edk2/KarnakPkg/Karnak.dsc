@@ -81,6 +81,7 @@
   PlatformPrePiLib|KarnakPkg/Library/PlatformPrePiLib/PlatformPrePiLib.inf
   PlatformMemoryMapLib|KarnakPkg/Library/PlatformMemoryMapLib/PlatformMemoryMapLib.inf
   XnuImageLib|XnuLoaderPkg/Library/XnuImageLib/XnuImageLib.inf
+  KarnakBootArgsLib|XnuLoaderPkg/Library/KarnakBootArgsLib/KarnakBootArgsLib.inf
 
 [LibraryClasses.common.DXE_DRIVER]
   # More specific than the MediaTekCommonDsc.inc mapping, so this overrides it

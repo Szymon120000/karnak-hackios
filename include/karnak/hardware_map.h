@@ -4,7 +4,7 @@
  * Sources (every value is traceable to one of these):
  *   arch/arm64/boot/dts/karnak.dts
  *   arch/arm64/boot/dts/mt8163.dtsi
- *   drivers/misc/mediatek/lcm/*_wxga_dsi_vdo_karnak/*.c
+ *   drivers/misc/mediatek/lcm/<panel>_wxga_dsi_vdo_karnak/<panel>.c
  *   drivers/misc/mediatek/video/mt8163/videox/mtkfb.c
  *
  * Runtime values that cannot be known at build time are marked

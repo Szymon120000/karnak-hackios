@@ -7,6 +7,7 @@
 #include <string.h>
 
 typedef uint8_t  UINT8;
+typedef uint16_t UINT16;
 typedef uint32_t UINT32;
 typedef uint64_t UINT64;
 typedef size_t   UINTN;
@@ -19,6 +20,9 @@ typedef UINTN    EFI_STATUS;
 #define FALSE 0
 #define NULL  ((void *)0)
 #define MAX_UINT64 UINT64_MAX
+
+#define STATIC_ASSERT  _Static_assert
+#define OFFSET_OF(TYPE, Field)  __builtin_offsetof (TYPE, Field)
 
 #define IN
 #define OUT

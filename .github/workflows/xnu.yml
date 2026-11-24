@@ -16,7 +16,7 @@ on:
 
 jobs:
   board-header:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +37,19 @@ jobs:
               platform/edk2/XnuLoaderPkg/Library/XnuImageLib/XnuImageLib.c \
               -o /tmp/xnu_image_test
           /tmp/xnu_image_test
+
+      - name: Compile and run boot_args tests
+        run: |
+          # Verifies every field offset against Apple's xnu-8796 arm64 boot.h
+          # (vendored in xnu/include) before it is used in firmware.
+          gcc -std=gnu11 -Wall -Wextra -Werror \
+              -I xnu/tests/hostshim \
+              -I platform/edk2/XnuLoaderPkg/Include \
+              -I xnu/include/pexpert \
+              xnu/tests/boot_args_test.c \
+              platform/edk2/XnuLoaderPkg/Library/KarnakBootArgsLib/KarnakBootArgsLib.c \
+              -o /tmp/boot_args_test
+          /tmp/boot_args_test
 
   kernel:
     runs-on: macos-14

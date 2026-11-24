@@ -20,10 +20,13 @@
 #include <Library/MemoryAllocationLib.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiLib.h>
+#include <karnak/hardware_map.h>
+#include <Library/KarnakBootArgsLib.h>
 #include <Library/XnuImageLib.h>
 
 #define XNU_KERNEL_PATH        L"\\xnu\\kernelcache"
 #define XNU_MAX_IMAGE_BYTES    (96ULL * 1024 * 1024)
+#define FDT_MAGIC              0xD00DFEEDU
 
 STATIC
 EFI_STATUS
@@ -78,6 +81,72 @@ ReadWholeFile (
 
   *Size = ReadSize;
   return EFI_SUCCESS;
+}
+
+/**
+  Build a boot_args preview from the DTB that KarnakBootShim saved.
+
+  This is diagnostic only: it proves the shim pointer, the FDT header and the
+  boot_args layout agree on real hardware.  It deliberately uses the DTS-floor
+  DRAM values for now; the handoff will take them from the live memory map.
+**/
+STATIC
+VOID
+PreviewBootArgs (
+  VOID
+  )
+{
+  volatile UINT64           *PointerStore;
+  UINT64                    DtbAddress;
+  volatile UINT32           *Dtb;
+  UINT32                    DtbSize;
+  KARNAK_BOOT_ARGS          Args;
+  KARNAK_BOOT_ARGS_CONFIG   Config;
+  EFI_STATUS                Status;
+
+  PointerStore = (volatile UINT64 *)(UINTN)KARN_DTB_PTR_STORE;
+  DtbAddress   = *PointerStore;
+  if (DtbAddress == 0) {
+    Print (L"XnuLoader: no shim DTB pointer yet; boot_args preview skipped\n");
+    return;
+  }
+
+  Dtb = (volatile UINT32 *)(UINTN)DtbAddress;
+  if (SwapBytes32 (Dtb[0]) != FDT_MAGIC) {
+    Print (L"XnuLoader: shim pointer 0x%lx is not an FDT (%08x)\n",
+           DtbAddress, SwapBytes32 (Dtb[0]));
+    return;
+  }
+
+  DtbSize = SwapBytes32 (Dtb[1]);
+  if ((DtbSize < sizeof (UINT32) * 2) || (DtbSize > KARN_DTB_STORE_SIZE)) {
+    Print (L"XnuLoader: DTB at 0x%lx has implausible size 0x%x\n",
+           DtbAddress, DtbSize);
+    return;
+  }
+
+  ZeroMem (&Config, sizeof (Config));
+  Config.PhysBase         = KARN_DRAM_BASE;
+  Config.MemSize          = KARN_DRAM_SIZE_DTS;
+  /* Preview only: the real value is the end of the loaded kernel image. */
+  Config.TopOfKernelData  = KARN_DRAM_END_DTS;
+  Config.DeviceTree       = (VOID *)(UINTN)DtbAddress;
+  Config.DeviceTreeLength = DtbSize;
+
+  Status = KarnakBootArgsInit (&Args, &Config);
+  if (EFI_ERROR (Status)) {
+    Print (L"XnuLoader: boot_args preview failed (%r)\n", Status);
+    return;
+  }
+
+  Print (L"XnuLoader: boot_args preview: %u bytes, rev %u, DT 0x%lx + 0x%x\n",
+         (UINT32)sizeof (Args), Args.Revision, DtbAddress, DtbSize);
+  if (KarnakBootArgsValidate (&Args)) {
+    Print (L"XnuLoader: boot_args preview validates (DRAM floor 0x%lx)\n",
+           Config.MemSize);
+  } else {
+    Print (L"XnuLoader: boot_args preview does not validate\n");
+  }
 }
 
 EFI_STATUS
@@ -158,6 +227,8 @@ UefiMain (
   /* No destination is chosen yet.  When the handoff lands it calls
      XnuImageCheckPlacement(Info, DestBase, reserved...) for every firmware
      reservation and refuses to boot on EFI_ACCESS_DENIED. */
+  PreviewBootArgs ();
+
   FreePool (Image);
   Print (L"XnuLoader: boot_args handoff not implemented; refusing to boot.\n");
   return EFI_UNSUPPORTED;

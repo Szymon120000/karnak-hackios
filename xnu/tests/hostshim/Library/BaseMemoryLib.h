@@ -13,4 +13,14 @@ ZeroMem (
   memset (Buffer, 0, Length);
 }
 
+static inline void
+CopyMem (
+  void        *Destination,
+  const void  *Source,
+  size_t      Length
+  )
+{
+  memmove (Destination, Source, Length);
+}
+
 #endif

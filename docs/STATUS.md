@@ -35,9 +35,11 @@
   needs the full sweet/beyond2lte patch series adapted to MT8163 (GICv2,
   A53 errata, no UFS, MSDC0 instead of UFS, different PMIC). Tracked in
   `xnu/README.md`.
-- **XnuLoader**: the Mach-O parser and a validation-only application exist
-  (builds in CI, prints the segment map, refuses to boot); the `boot_args`
-  builder and the `ExitBootServices` handoff do not.
+- **XnuLoader**: the Mach-O parser, a `boot_args` builder (`KarnakBootArgsLib`,
+  layout asserted against Apple's xnu-8796 arm64 header) and a validation-only
+  application exist; it prints the segment map and a `boot_args` preview from
+  the shim's DTB, then refuses to boot.  The `ExitBootServices` / MMU-off
+  handoff does not exist yet.
 - **Disk-backed rootfs**: the GPT container is built and tested, but the HFS+
   payload (IPSW-derived Darwin tree) and the MSDC0 block driver are missing.
 - **Touch/display panel drivers**: the panel is driven by LK; XNU framebuffer
