@@ -2,8 +2,9 @@
 
 ## What is implemented
 
-- **Hardware map**: generated from Amazon's 3.18 DTS. `--check` mode makes CI
-  fail if it drifts from the sources.
+- **Hardware map**: generated from Amazon's 3.18 DTS. `--check` mode fails the
+  build if it drifts from the sources (skipped with a warning on hosts without
+  Python `libfdt`).
 - **KarnakBootShim** (`platform/edk2/KarnakPkg/BootShim/BootShim.S`):
   - preserves LK's `x0` DTB pointer,
   - copies a validated blob to `0x4fe00000` (bounded to 1 MiB),
@@ -15,7 +16,15 @@
   - `DtPlatformDxe` fed by `KarnakDtbLoaderLib`,
   - UART0 console at 921600 (LK-configured),
   - SimpleFbDxe, watchdog kicker, shell, FAT, USB, RamDisk.
-- **CI**: `uefi.yml` builds `out/uefi-karnak.img` on every push.
+- **XnuImageLib** (`platform/edk2/XnuLoaderPkg/Library/XnuImageLib`): validates
+  an ARM64 Mach-O kernel, records its loadable segments, computes the physical
+  footprint on 16 KiB pages and checks a proposed destination against reserved
+  ranges.  Host tests (`xnu/tests/xnu_image_test.c`) run in CI.
+- **Rootfs container** (`rootfs/mkrootfs.py`): dependency-free GPT builder for a
+  FAT boot partition plus an HFS+ `KARNAK-ROOT` partition, with host tests and
+  `sgdisk --verify` in CI.
+- **CI**: `uefi.yml` builds `out/uefi-karnak.img` with the GCC5 toolchain on
+  every push; `rootfs.yml` and `xnu.yml` validate their own pieces.
 
 ## Not implemented / unverified
 
@@ -23,8 +32,10 @@
   needs the full sweet/beyond2lte patch series adapted to MT8163 (GICv2,
   A53 errata, no UFS, MSDC0 instead of UFS, different PMIC). Tracked in
   `xnu/README.md`.
-- **XnuLoader**: design notes only; no UEFI application yet.
-- **Disk-backed rootfs**: `rootfs/` is a placeholder; no image is produced.
+- **XnuLoader**: the Mach-O parser exists; the `boot_args` builder and the
+  `ExitBootServices` handoff do not.
+- **Disk-backed rootfs**: the GPT container is built and tested, but the HFS+
+  payload (IPSW-derived Darwin tree) and the MSDC0 block driver are missing.
 - **Touch/display panel drivers**: the panel is driven by LK; XNU framebuffer
   output is not yet wired.
 - **PMIC/GPIO**: `MtkGpioImplLib` and `PmicWrapperImplLib` are bound to the
