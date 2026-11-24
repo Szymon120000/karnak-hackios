@@ -12,6 +12,10 @@ This directory contains:
 
 - `overlay/pexpert/pexpert/arm64/KARNAK.h` — board constants, standalone and
   host-testable (`tests/board_static_test.c`).
+- `include/pexpert/...` — vendored xnu-8796 arm64 `boot.h` used only by the
+  host test that asserts the firmware `boot_args` layout (see the README there).
+- `tests/boot_args_test.c` — verifies `KarnakBootArgsLib` (in XnuLoaderPkg)
+  field-for-field against that header.
 - `README.md` — the porting plan and what is still missing.
 
 It does **not** yet contain a bootable kernel.
