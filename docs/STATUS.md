@@ -4,7 +4,8 @@
 
 - **Hardware map**: generated from Amazon's 3.18 DTS. `--check` mode fails the
   build if it drifts from the sources (skipped with a warning on hosts without
-  Python `libfdt`).
+  Python `libfdt`).  Generated text is independent of whether `--kernel` was
+  given as a relative or absolute path.
 - **KarnakBootShim** (`platform/edk2/KarnakPkg/BootShim/BootShim.S`):
   - preserves LK's `x0` DTB pointer,
   - copies a validated blob to `0x4fe00000` (bounded to 1 MiB),
@@ -24,7 +25,9 @@
   FAT boot partition plus an HFS+ `KARNAK-ROOT` partition, with host tests and
   `sgdisk --verify` in CI.
 - **CI**: `uefi.yml` builds `out/uefi-karnak.img` with the GCC5 toolchain on
-  every push; `rootfs.yml` and `xnu.yml` validate their own pieces.
+  Ubuntu 24.04, then checks the boot header, the shim payload offset and the FV
+  header checksum with `tools/check_boot_image.py`.  `rootfs.yml` and `xnu.yml`
+  validate their own pieces.
 
 ## Not implemented / unverified
 
