@@ -80,6 +80,7 @@
   PlatformPeiLib|KarnakPkg/Library/PlatformPeiLib/PlatformPeiLib.inf
   PlatformPrePiLib|KarnakPkg/Library/PlatformPrePiLib/PlatformPrePiLib.inf
   PlatformMemoryMapLib|KarnakPkg/Library/PlatformMemoryMapLib/PlatformMemoryMapLib.inf
+  XnuImageLib|XnuLoaderPkg/Library/XnuImageLib/XnuImageLib.inf
 
 [LibraryClasses.common.DXE_DRIVER]
   # More specific than the MediaTekCommonDsc.inc mapping, so this overrides it
@@ -98,3 +99,7 @@
 [Components.common]
   # Minimal platform identification driver (prints DRAM + DTB source).
   KarnakPkg/Drivers/KarnakInfoDxe/KarnakInfoDxe.inf
+
+  # Built and linked, but not placed in the FV: it refuses to boot until the
+  # boot_args handoff exists.  Keeping it in [Components] makes CI compile it.
+  XnuLoaderPkg/Application/XnuLoader/XnuLoader.inf

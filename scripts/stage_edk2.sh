@@ -22,6 +22,11 @@ mkdir -p "$(dirname "$DST")"
 rm -rf "$DST"
 cp -a "$SRC" "$DST"
 
+# XnuLoader lives in its own package; copy it next to KarnakPkg so the same
+# PACKAGES_PATH entry finds both.
+rm -rf "$EDK2_DIR/Platform/Amazon/XnuLoaderPkg"
+cp -a "$ROOT/platform/edk2/XnuLoaderPkg" "$EDK2_DIR/Platform/Amazon/XnuLoaderPkg"
+
 # Keep the generated hardware map alongside the package for traceability.
 mkdir -p "$DST/Docs"
 cp "$ROOT/include/karnak/hardware_map.h" "$DST/Docs/"

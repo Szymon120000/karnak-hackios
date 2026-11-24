@@ -16,6 +16,7 @@
 
 [Packages]
   MdePkg/MdePkg.dec
+  XnuLoaderPkg/XnuLoaderPkg.dec
 
 [LibraryClasses]
   BaseMemoryLib
