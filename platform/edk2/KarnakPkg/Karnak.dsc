@@ -73,6 +73,10 @@
   gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemRevision|0x00000850
 
 [LibraryClasses.common]
+  # karnak overrides: generated-from-DTS UART console and FDT access.
+  SerialPortLib|KarnakPkg/Library/KarnakSerialPortLib/KarnakSerialPortLib.inf
+  KarnakFdtLib|KarnakPkg/Library/KarnakFdtLib/KarnakFdtLib.inf
+
   PlatformPeiLib|KarnakPkg/Library/PlatformPeiLib/PlatformPeiLib.inf
   PlatformPrePiLib|KarnakPkg/Library/PlatformPrePiLib/PlatformPrePiLib.inf
   PlatformMemoryMapLib|KarnakPkg/Library/PlatformMemoryMapLib/PlatformMemoryMapLib.inf

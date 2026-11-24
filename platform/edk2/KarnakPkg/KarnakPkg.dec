@@ -7,6 +7,10 @@
 [Includes]
   Include
 
+[LibraryClasses]
+  ##  @libraryclass  Reads the live device tree published by KarnakBootShim.
+  KarnakFdtLib|Include/Library/KarnakFdtLib.h
+
 [Guids]
   gKarnakPkgTokenSpaceGuid        = { 0x5a1e8c40, 0x3b27, 0x4f6d, { 0x9a, 0x11, 0x7c, 0x2d, 0x84, 0x55, 0x0e, 0x93 } }
 

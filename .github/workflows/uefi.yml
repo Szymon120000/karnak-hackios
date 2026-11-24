@@ -8,6 +8,7 @@ on:
       - "include/**"
       - "scripts/**"
       - "tools/**"
+      - "build_uefi.sh"
       - ".github/workflows/uefi.yml"
   pull_request:
   workflow_dispatch:
@@ -30,49 +31,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential uuid-dev nasm iasl \
+            clang lld llvm \
             gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
-            python3 python3-pip python3-venv \
+            python3 python3-pip \
             git make
-          python3 -m pip install --user --upgrade pip
-          python3 -m pip install --user \
-            edk2-pytool-extensions edk2-pytool-library
-
-      - name: Put pip entry points on PATH
-        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Cache edk2-mtk checkout
         uses: actions/cache@v4
         with:
           path: vendor/edk2-mtk
-          key: edk2-mtk-next-${{ runner.os }}
+          key: edk2-mtk-${{ runner.os }}-${{ hashFiles('scripts/fetch_deps.sh') }}
 
       - name: Fetch edk2-mtk
         run: ./scripts/fetch_deps.sh
 
-      - name: Stage KarnakPkg
-        run: ./scripts/stage_edk2.sh vendor/edk2-mtk
-
-      - name: Build BaseTools
-        working-directory: vendor/edk2-mtk
-        run: make -C Common/edk2/BaseTools -j"$(nproc)"
-
-      - name: Update edk2 dependencies
-        working-directory: vendor/edk2-mtk
-        run: python3 Platform/Amazon/KarnakPkg/PlatformBuild.py --update
-
-      - name: Build platform
-        working-directory: vendor/edk2-mtk
-        run: python3 Platform/Amazon/KarnakPkg/PlatformBuild.py TARGET=RELEASE
-
-      - name: Collect artifacts
-        run: |
-          mkdir -p out
-          cp -v vendor/edk2-mtk/Build/karnak/RELEASE_CLANG38/FV/KARNAK_UEFI.fd \
-                out/uefi-karnak.fd || true
-          cp -v vendor/edk2-mtk/Build/karnak/RELEASE_CLANG38/FV/KARNAK_UEFI.fd.shimmed \
-                out/uefi-karnak.fd.shimmed || true
-          cp -v vendor/edk2-mtk/out/boot-karnak.img out/uefi-karnak.img || true
-          ls -lh out
+      - name: Build firmware and boot image
+        run: ./scripts/build_uefi.sh DEBUG
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
@@ -88,7 +62,7 @@ jobs:
         with:
           name: karnak-uefi-buildlogs
           path: |
-            vendor/edk2-mtk/Build/karnak/**/BuildReport.log
             vendor/edk2-mtk/Build/karnak/**/*.log
+            vendor/edk2-mtk/Build/karnak/**/BuildReport.log
           if-no-files-found: ignore
           retention-days: 7
