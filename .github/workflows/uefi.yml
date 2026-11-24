@@ -65,7 +65,7 @@ jobs:
           MOD=vendor/edk2-mtk/Build/karnak/DEBUG_GCC5/AARCH64/MediaTekPkg/Drivers/LogoDxe/LogoDxe
           if [ -d "$MOD" ]; then
             cd "$MOD"
-            make -f GNUmakefile OUTPUT/LogoDxehii.lib GENFW=/tmp/gdbwrap/GenFw 2>&1 | tail -40
+            make -f GNUmakefile "$PWD/OUTPUT/LogoDxehii.lib" GENFW=/tmp/gdbwrap/GenFw 2>&1 | tail -60
           fi
 
       - name: Upload firmware artifacts
