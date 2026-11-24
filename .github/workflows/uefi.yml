@@ -56,6 +56,10 @@ jobs:
         working-directory: vendor/edk2-mtk
         run: make -C Common/edk2/BaseTools -j"$(nproc)"
 
+      - name: Update edk2 dependencies
+        working-directory: vendor/edk2-mtk
+        run: python3 Platform/Amazon/KarnakPkg/PlatformBuild.py --update
+
       - name: Build platform
         working-directory: vendor/edk2-mtk
         run: python3 Platform/Amazon/KarnakPkg/PlatformBuild.py TARGET=RELEASE
