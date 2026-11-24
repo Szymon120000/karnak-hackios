@@ -29,6 +29,7 @@ jobs:
       - name: Check helper tooling
         run: |
           python3 tools/test_check_boot_image.py
+          python3 tools/test_mkbootimg.py
           bash -n tools/probe_karnak.sh scripts/*.sh
 
       - name: Install host dependencies

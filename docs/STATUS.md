@@ -50,6 +50,21 @@
 - **DRAM size**: see `docs/HARDWARE.md`. Until a live DTB proves 1.5 GB, treat
   512 MiB as the safe floor.
 
+## Hardware test readiness
+
+The first on-device test is the UEFI stage only (`LK -> BootShim -> EDK2`):
+
+- `BOOT_HEADER_VERSION=0` produces `out/uefi-karnak-lk.img` in the legacy
+  layout the stock LK expects (2048-byte pages, explicit `kernel_addr` and
+  `tags_addr`, both mandatory).
+- `scripts/flash_karnak.sh` validates the image, the `karnak` product string,
+  the unlock state and a stock boot-image backup before writing.
+- Still blocked on the real `LK_KERNEL_ADDR`/`LK_TAGS_ADDR` values from the
+  device's stock boot image; they are not guessed.
+
+Expected on success: UEFI console/shell plus `KarnakInfoDxe` DTB/DRAM lines.
+There is no XNU kernel and no internal eMMC driver yet.
+
 ## Boot chain checkpoints
 
 When serial logging works, the expected markers are:

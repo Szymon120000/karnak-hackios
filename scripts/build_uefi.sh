@@ -6,6 +6,11 @@
 # Environment:
 #   SKIP_FETCH=1   reuse an existing vendor/edk2-mtk checkout
 #   JOBS=N         parallel make jobs (default: nproc)
+#   BOOT_HEADER_VERSION=4  boot image header (4 for CI; 0 for karnak's LK).
+#                          Header v0 additionally requires:
+#   LK_KERNEL_ADDR=0x...   physical kernel load address used by the stock LK
+#   LK_TAGS_ADDR=0x...     tags/DTB address used by the stock LK
+#                          Both are mandatory for v0; they are never guessed.
 #
 # The build deliberately drives EDK2's `build` tool directly instead of the
 # stuart/edk2-pytool wrapper: KarnakPkg has no Python dependencies, and the
@@ -21,6 +26,7 @@ TARGET="${1:-${TARGET:-DEBUG}}"
 # on at least one module.
 TOOLCHAIN="${TOOLCHAIN:-GCC5}"
 JOBS="${JOBS:-$(nproc)}"
+BOOT_HEADER_VERSION="${BOOT_HEADER_VERSION:-4}"
 
 # Firmware layout, must match include/karnak/hardware_map.h.
 FD_BASE="0x50000000"
@@ -150,13 +156,30 @@ make -C "$SHIM_DIR" \
 
 mkdir -p "$ROOT/out"
 cat "$SHIM_DIR/BootShim.bin" "$FD" > "$ROOT/out/uefi-karnak.fd"
+
+# A v0 image is what the stock 2018 LK understands.  Its load addresses are
+# device-specific, so require them explicitly instead of guessing.
+if [[ "$BOOT_HEADER_VERSION" == "0" ]]; then
+  : "${LK_KERNEL_ADDR:?set LK_KERNEL_ADDR (from the stock boot.img/LK) for header v0}"
+  : "${LK_TAGS_ADDR:?set LK_TAGS_ADDR (from the stock boot.img/LK) for header v0}"
+  BOOT_IMG="$ROOT/out/uefi-karnak-lk.img"
+  MKBOOT_ARGS=(
+    --header_version 0
+    --kernel_addr "$LK_KERNEL_ADDR"
+    --tags_addr "$LK_TAGS_ADDR"
+  )
+else
+  BOOT_IMG="$ROOT/out/uefi-karnak.img"
+  MKBOOT_ARGS=(--header_version "$BOOT_HEADER_VERSION")
+fi
+
 python3 "$EDK2_DIR/Platform/Amazon/KarnakPkg/Tools/mkbootimg.py" \
-  --header_version 4 \
+  "${MKBOOT_ARGS[@]}" \
   --kernel "$ROOT/out/uefi-karnak.fd" \
-  --output "$ROOT/out/uefi-karnak.img"
+  --output "$BOOT_IMG"
 
 # Structural check: boot header, shim payload offset and FV checksum.
-python3 "$ROOT/tools/check_boot_image.py" "$ROOT/out/uefi-karnak.img" \
+python3 "$ROOT/tools/check_boot_image.py" "$BOOT_IMG" \
   --fd-size "$FD_SIZE"
 
 echo
