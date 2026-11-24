@@ -10,6 +10,12 @@ records the loadable segments, computes the file/VM footprint on 16 KiB
 granularity, and checks a proposed physical destination against reserved
 ranges.  Its tests live in `xnu/tests/xnu_image_test.c` and run in CI.
 
+`Application/XnuLoader` is built by `Karnak.dsc` but **not** placed in the FV.
+It opens `\xnu\kernelcache` on the boot volume, runs it through the parser and
+prints the segment map, then returns `EFI_UNSUPPORTED`.  That makes the file
+path, FAT driver and parser testable on hardware without risking a half-built
+handoff.
+
 This document records the design and the concrete work items so the next
 session can implement it against a known-good firmware.
 
