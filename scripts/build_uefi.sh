@@ -51,6 +51,13 @@ for tpl in tools_def build_rule target; do
   [[ -f "$dst" ]] || cp "$EDK2_DIR/Common/edk2/BaseTools/Conf/$tpl.template" "$dst"
 done
 
+# Some vendor modules pull in <arm_neon.h>, which includes the target libc's
+# <stdint.h>.  Point clang at the aarch64 sysroot when the distro provides one
+# (Debian/Ubuntu: libc6-dev-arm64-cross).
+if [[ -d /usr/aarch64-linux-gnu/include ]]; then
+  export CPATH="${CPATH:+$CPATH:}/usr/aarch64-linux-gnu/include"
+fi
+
 make -C "$EDK2_DIR/Common/edk2/BaseTools" -j"$JOBS"
 
 # shellcheck disable=SC1091

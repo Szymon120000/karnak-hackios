@@ -18,21 +18,18 @@
  */
 
 _Head:
-	adr	x1, _Payload
-	b	_Start
-
-	/* Android arm64 Image header (LK understands this layout). */
-	.long	0			/* code0 */
-	.long	0			/* code1 */
+	/* ARM64 Linux Image header (LK's booti recognises it). */
+	b	_Start			/* code0 */
+	.long	0			/* code1: reserved */
 	.quad	0			/* text_offset */
-	.quad	UEFI_SIZE		/* image_size */
-	.quad	0			/* flags */
+	.quad	UEFI_SIZE + 0x1000	/* image_size: FD + header slack */
+	.quad	0			/* flags: LE, 4K pages */
 	.quad	0			/* res2 */
 	.quad	0			/* res3 */
 	.quad	0			/* res4 */
-	.ascii	"ARM\x64"
-	.long	0
-	.ascii	"KARNAK"
+	.ascii	"ARM\x64"		/* image magic, bytes 41 52 4d 64 */
+	.long	0			/* res5 */
+	.ascii	"KARNAK"		/* vendor tag (outside the header) */
 
 	.balign	4
 _Start:
@@ -77,10 +74,32 @@ _Start:
 	adr	x5, _Payload
 	ldr	x4, =UEFI_BASE
 	ldr	x6, =UEFI_SIZE
+
+	/*
+	 * A forward copy is only safe when the source does not overlap the
+	 * destination.  LK normally picks a load address below UEFI_BASE, but
+	 * do the copy backwards if the source sits inside the target range so
+	 * a relocation to overlapping memory cannot corrupt the payload.
+	 */
+	cmp	x5, x4
+	b.lo	3f			/* src < dst: forward */
+	add	x7, x4, x6
+	cmp	x5, x7
+	b.hs	3f			/* src >= dst + size: forward */
+
+	add	x5, x5, x6
+	add	x4, x4, x6
+4:	ldp	x2, x3, [x5, #-16]!
+	stp	x2, x3, [x4, #-16]!
+	subs	x6, x6, #16
+	b.ne	4b
+	b	5f
+
 3:	ldp	x2, x3, [x5], #16
 	stp	x2, x3, [x4], #16
 	subs	x6, x6, #16
 	b.ne	3b
+5:
 
 	/* The payload was written with the MMU off; make it visible. */
 	dsb	sy
@@ -95,7 +114,7 @@ _Dead:
 	b	_Dead
 
 	/* Keep the literal pool before the payload so BootShim.bin ends exactly
-	 * at _Payload: PlatformBuild.py appends the FD there. */
+	 * at _Payload: scripts/build_uefi.sh appends the FD there. */
 	.ltorg
 
 .text
