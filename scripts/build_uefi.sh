@@ -51,6 +51,37 @@ for tpl in tools_def build_rule target; do
   [[ -f "$dst" ]] || cp "$EDK2_DIR/Common/edk2/BaseTools/Conf/$tpl.template" "$dst"
 done
 
+# CLANG38 AARCH64 defaults to LTO for both DEBUG and RELEASE.  LTO produces
+# bitcode-heavy ELF that BaseTools' GenFw chokes on (observed: SIGSEGV while
+# converting AcpiPlatformDxe), and it also hard-codes -llto-aarch64 from
+# ArmPkg/Library/GccLto, which this MediaTek tree does not ship.  Boot firmware
+# gains nothing from LTO, so strip it from the CLANG38 AARCH64 flags.
+python3 - "$CONF_PATH/tools_def.txt" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+text = open(path).read()
+pat = re.compile(
+    r"^(\s*(?:DEBUG|RELEASE)_CLANG38_AARCH64_(?:CC|DLINK)_FLAGS\s*=.*)$",
+    re.MULTILINE,
+)
+drop = re.compile(
+    r"\s*(?:-flto\b|-Wl,-O\d\b|-O[13]\b|-L\$\(WORKSPACE\)/ArmPkg/Library/GccLto"
+    r"|-llto-aarch64|-Wl,-plugin-opt=-pass-through=-llto-aarch64)"
+)
+
+
+def clean(match):
+    return drop.sub("", match.group(1))
+
+
+new, n = pat.subn(clean, text)
+if new != text:
+    open(path, "w").write(new)
+    print(f"tools_def: removed LTO from {n} CLANG38 AARCH64 flag line(s)")
+PY
+
 # Some vendor modules pull in <arm_neon.h>, which includes the target libc's
 # <stdint.h>.  Point clang at the aarch64 sysroot when the distro provides one
 # (Debian/Ubuntu: libc6-dev-arm64-cross).
