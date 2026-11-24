@@ -35,7 +35,7 @@ jobs:
             git make
           python3 -m pip install --user --upgrade pip
           python3 -m pip install --user \
-            edk2-pytool-extensions edk2-pytool-library mkbootimg
+            edk2-pytool-extensions edk2-pytool-library
 
       - name: Put pip entry points on PATH
         run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"

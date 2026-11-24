@@ -8,6 +8,7 @@
 import logging
 import os
 import subprocess
+import sys
 
 from edk2toolext import edk2_logging
 from edk2toolext.environment import shell_environment
@@ -200,9 +201,10 @@ class PlatformBuilder(UefiBuilder, BuildSettingsManager):
         kernel = os.path.join(out_dir, "FV", platform.upper() + "_UEFI.fd.shimmed")
         os.makedirs("out", exist_ok=True)
         output = os.path.join("out", "boot-karnak.img")
+        tool = os.path.join(BOOTSHIM_DIR, "..", "Tools", "mkbootimg.py")
         try:
             subprocess.run(
-                ["mkbootimg", "--header_version", "4",
+                [sys.executable, tool, "--header_version", "4",
                  "--kernel", kernel,
                  "--output", output],
                 check=True)
