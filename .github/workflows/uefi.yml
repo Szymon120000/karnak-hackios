@@ -26,6 +26,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check helper tooling
+        run: |
+          python3 tools/test_check_boot_image.py
+          bash -n tools/probe_karnak.sh scripts/*.sh
+
       - name: Install host dependencies
         run: |
           sudo apt-get update
