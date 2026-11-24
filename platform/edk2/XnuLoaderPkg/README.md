@@ -1,8 +1,14 @@
 # XnuLoader (design)
 
-`XnuLoader` is the last UEFI stage before XNU.  It is deliberately not
-implemented yet: a loader that cannot hand off correctly is worse than none, and
-the XNU side (`xnu/README.md`) is not ready to receive control.
+`XnuLoader` is the last UEFI stage before XNU.  The Mach-O half is implemented
+and host-tested in `Library/XnuImageLib`; the handoff itself is deliberately
+not written yet: a loader that cannot hand off correctly is worse than none,
+and the XNU side (`xnu/README.md`) is not ready to receive control.
+
+`XnuImageLib` validates the image (magic, CPU, filetype, every load command),
+records the loadable segments, computes the file/VM footprint on 16 KiB
+granularity, and checks a proposed physical destination against reserved
+ranges.  Its tests live in `xnu/tests/xnu_image_test.c` and run in CI.
 
 This document records the design and the concrete work items so the next
 session can implement it against a known-good firmware.
