@@ -49,6 +49,25 @@ jobs:
       - name: Build firmware and boot image
         run: ./scripts/build_uefi.sh DEBUG
 
+      - name: Diagnose GenFw crash
+        if: failure()
+        run: |
+          sudo apt-get install -y -qq gdb
+          BIN="$PWD/vendor/edk2-mtk/Common/edk2/BaseTools/Source/C/bin"
+          file "$BIN/GenFw"
+          "$BIN/GenFw" --version || true
+          mkdir -p /tmp/gdbwrap
+          cat > /tmp/gdbwrap/GenFw <<EOF
+          #!/bin/sh
+          exec gdb -batch -ex run -ex "bt full" --args "$BIN/GenFw" "\$@"
+          EOF
+          chmod +x /tmp/gdbwrap/GenFw
+          MOD=vendor/edk2-mtk/Build/karnak/DEBUG_GCC5/AARCH64/MediaTekPkg/Drivers/LogoDxe/LogoDxe
+          if [ -d "$MOD" ]; then
+            cd "$MOD"
+            make -f GNUmakefile OUTPUT/LogoDxehii.lib GENFW=/tmp/gdbwrap/GenFw 2>&1 | tail -40
+          fi
+
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
