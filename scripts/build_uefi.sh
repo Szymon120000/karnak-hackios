@@ -44,6 +44,13 @@ export CLANG38_BIN="${CLANG38_BIN:-/usr/bin/}"
 export CLANG38_AARCH64_PREFIX="${CLANG38_AARCH64_PREFIX:-aarch64-linux-gnu-}"
 export CONF_PATH="${CONF_PATH:-$EDK2_DIR/Conf}"
 
+# edk2 expects a workspace-level Conf/ with the toolchain templates.
+mkdir -p "$CONF_PATH"
+for tpl in tools_def build_rule target; do
+  dst="$CONF_PATH/$tpl.txt"
+  [[ -f "$dst" ]] || cp "$EDK2_DIR/Common/edk2/BaseTools/Conf/$tpl.template" "$dst"
+done
+
 make -C "$EDK2_DIR/Common/edk2/BaseTools" -j"$JOBS"
 
 # shellcheck disable=SC1091
