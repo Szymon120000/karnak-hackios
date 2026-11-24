@@ -29,13 +29,8 @@ for mod in ("libfdt",):
     except Exception:
         print(f"  MISSING {mod} (Debian: python3-libfdt)")
 PY
-for mod in ("edk2toolext", "edk2toollib"); do
-  if python3 -c "import $mod" >/dev/null 2>&1; then
-    echo "  ok      $mod"
-  else
-    echo "  MISSING $mod (pip install edk2-pytool-extensions edk2-pytool-library)"
-  fi
-done
+# edk2-pytool is not needed: build_uefi.sh calls BaseTools' build directly.
+
 
 echo
 if [[ $missing -eq 0 ]]; then

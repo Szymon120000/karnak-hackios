@@ -29,14 +29,18 @@ DRAM-size conflict between the shipped DTS (512 MiB) and the product (1.5 GB).
 
 ## Build the firmware
 
-Requirements: `git`, `make`, `python3`, `clang`, `aarch64-linux-gnu-gcc`,
-`dtc`, `nasm`, `iasl`, `uuid-dev`, `python3-libfdt`, and
-`edk2-pytool-extensions` / `edk2-pytool-library` from pip.
+Requirements: `git`, `make`, `python3`, `clang`, `lld`, `llvm`,
+`aarch64-linux-gnu-gcc`, `nasm`, `iasl`, `uuid-dev`.  Options: `dtc` and
+Python `libfdt` (only for regenerating the hardware map).
 
 ```sh
 ./scripts/check_env.sh      # what is missing?
-./build_uefi.sh             # fetches edk2-mtk, stages KarnakPkg, builds
+./build_uefi.sh             # fetches edk2-mtk, stages KarnakPkg, builds (DEBUG)
+./build_uefi.sh RELEASE     # optimized image
 ```
+
+The build drives EDK2's `build` tool directly; no `edk2-pytool`/`stuart`
+environment is required.
 
 Output:
 

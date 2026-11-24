@@ -39,6 +39,7 @@ fi
 export WORKSPACE="$EDK2_DIR"
 export PACKAGES_PATH="$EDK2_DIR/Common/edk2:$EDK2_DIR/Common/edk2-platforms:$EDK2_DIR/Silicon/MediaTek:$EDK2_DIR/Platform/Amazon"
 export EDK_TOOLS_PATH="$EDK2_DIR/Common/edk2/BaseTools"
+export PYTHON_COMMAND="${PYTHON_COMMAND:-python3}"
 export CLANG38_BIN="${CLANG38_BIN:-/usr/bin/}"
 export CLANG38_AARCH64_PREFIX="${CLANG38_AARCH64_PREFIX:-aarch64-linux-gnu-}"
 export CONF_PATH="${CONF_PATH:-$EDK2_DIR/Conf}"
@@ -46,7 +47,9 @@ export CONF_PATH="${CONF_PATH:-$EDK2_DIR/Conf}"
 make -C "$EDK2_DIR/Common/edk2/BaseTools" -j"$JOBS"
 
 # shellcheck disable=SC1091
+set +u
 source "$EDK2_DIR/Common/edk2/edksetup.sh" BaseTools
+set -u
 
 cd "$EDK2_DIR"
 build \

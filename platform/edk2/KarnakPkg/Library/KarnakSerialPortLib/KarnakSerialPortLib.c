@@ -76,6 +76,8 @@ SerialPortRead (
   IN  UINTN      NumberOfBytes
   )
 {
+  (VOID)Buffer;
+  (VOID)NumberOfBytes;
   return 0;
 }
 
@@ -94,6 +96,7 @@ SerialPortSetControl (
   IN UINT32 Control
   )
 {
+  (VOID)Control;
   return RETURN_SUCCESS;
 }
 
@@ -120,5 +123,11 @@ SerialPortSetAttributes (
   IN OUT EFI_STOP_BITS_TYPE *StopBits
   )
 {
+  (VOID)BaudRate;
+  (VOID)ReceiveFifoDepth;
+  (VOID)Timeout;
+  (VOID)Parity;
+  (VOID)DataBits;
+  (VOID)StopBits;
   return RETURN_SUCCESS;
 }
