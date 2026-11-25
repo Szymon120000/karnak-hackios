@@ -26,7 +26,6 @@ APRIORI DXE {
   INF MdeModulePkg/Universal/Disk/RamDiskDxe/RamDiskDxe.inf
   INF MediaTekPkg/Drivers/RamDiskDxe/RamDiskDxe.inf
   INF MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
-  INF MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
   INF EmbeddedPkg/SimpleTextInOutSerial/SimpleTextInOutSerial.inf
   INF MdeModulePkg/Universal/Console/ConPlatformDxe/ConPlatformDxe.inf
   INF MdeModulePkg/Universal/Console/ConSplitterDxe/ConSplitterDxe.inf

@@ -1,0 +1,36 @@
+/** @file
+  karnak bring-up probe: prove that DXE reached the graphics output protocol.
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+**/
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = KarnakProbeDxe
+  FILE_GUID                      = 2F6B9A14-7C3D-4E58-9B27-6D1E4A0C7F35
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = KarnakProbeDxeEntry
+
+[Sources]
+  KarnakProbeDxe.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  KarnakPkg/KarnakPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  DebugLib
+  PcdLib
+  UefiBootServicesTableLib
+  UefiDriverEntryPoint
+
+[Protocols]
+  gEfiGraphicsOutputProtocolGuid
+
+[FixedPcd]
+  gKarnakPkgTokenSpaceGuid.PcdKarnakBringupMarkers
+
+[Depex]
+  gEfiGraphicsOutputProtocolGuid

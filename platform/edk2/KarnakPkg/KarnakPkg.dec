@@ -21,3 +21,7 @@
   gKarnakPkgTokenSpaceGuid.PcdDtbStoreBase|0x4FE00000|UINT64|0x00010002
   gKarnakPkgTokenSpaceGuid.PcdDtbStoreSize|0x00100000|UINT32|0x00010003
   gKarnakPkgTokenSpaceGuid.PcdKarnakUartBase|0x11002000|UINT32|0x00010004
+  # Bring-up only: KarnakProbeDxe paints a colour pattern on the panel.  The
+  # panel is the only debug output on a retail karnak, so this stays on until
+  # the UEFI console itself is proven on hardware.
+  gKarnakPkgTokenSpaceGuid.PcdKarnakBringupMarkers|FALSE|BOOLEAN|0x00010005

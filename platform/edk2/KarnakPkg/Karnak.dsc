@@ -78,6 +78,10 @@
 
   gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemRevision|0x00000850
 
+  # Bring-up only: paint a colour pattern from KarnakProbeDxe so the panel
+  # proves the LK -> shim -> DXE chain without a UART.
+  gKarnakPkgTokenSpaceGuid.PcdKarnakBringupMarkers|TRUE
+
 [LibraryClasses.common]
   # karnak overrides: generated-from-DTS UART console and FDT access.
   SerialPortLib|KarnakPkg/Library/KarnakSerialPortLib/KarnakSerialPortLib.inf
@@ -106,6 +110,9 @@
 [Components.common]
   # Minimal platform identification driver (prints DRAM + DTB source).
   KarnakPkg/Drivers/KarnakInfoDxe/KarnakInfoDxe.inf
+
+  # Bring-up probe: colour pattern once the GOP exists (see PCD above).
+  KarnakPkg/Drivers/KarnakProbeDxe/KarnakProbeDxe.inf
 
   # Built and linked, but not placed in the FV: it refuses to boot until the
   # boot_args handoff exists.  Keeping it in [Components] makes CI compile it.

@@ -24,11 +24,17 @@ FB_WIDTH      ?= 800
 FB_HEIGHT     ?= 1280
 FB_LAYERS     ?= 3
 
+# FB_MARKER=1 paints a red band on the top 128 rows of each LK framebuffer
+# layer before the handoff.  Off by default: LK's page tables map the panel
+# differently from EDK2, and a fault there hides everything after it.
+FB_MARKER     ?= 0
+
 DEFINES := -DUEFI_BASE=$(UEFI_BASE) -DUEFI_SIZE=$(UEFI_SIZE) \
            -DDTB_STORE=$(DTB_STORE) -DDTB_PTR_STORE=$(DTB_PTR_STORE) \
            -DDTB_MAX=$(DTB_MAX) -DWDT_BASE=$(WDT_BASE) \
            -DFB_BASE=$(FB_BASE) -DFB_WIDTH=$(FB_WIDTH) \
-           -DFB_HEIGHT=$(FB_HEIGHT) -DFB_LAYERS=$(FB_LAYERS)
+           -DFB_HEIGHT=$(FB_HEIGHT) -DFB_LAYERS=$(FB_LAYERS) \
+           $(if $(filter 1,$(FB_MARKER)),-DFB_MARKER=1)
 
 all: BootShim.bin
 

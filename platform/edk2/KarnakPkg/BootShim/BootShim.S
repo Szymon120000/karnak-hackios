@@ -40,21 +40,26 @@ _Start:
 	 * Stop the MT8163 top reset generator watchdog.  LK arms it and the
 	 * Linux kernel is expected to keep kicking it; nothing in UEFI does.
 	 * Register offsets and magic keys come from the in-tree
-	 * MediaTekPkg/Drivers/WatchDogDxe driver and the toprgu@10007000 node
-	 * in mt8163.dtsi.
+	 * MediaTekPkg/Drivers/WatchDogDxe driver, the kernel's mtk_wdt.c and
+	 * the toprgu@10007000 node in mt8163.dtsi.  Do the read-modify-write
+	 * the kernel uses so the AUTO_RESTART/power-key bypass bit survives.
 	 */
 	ldr	x1, =WDT_BASE
 	mov	w2, #0x1971		/* WDT_RST_KEY */
 	str	w2, [x1, #8]		/* WDT_RESTART */
-	ldr	w2, =0x22000000		/* WDT_MODE_KEY, clears the enable bits */
-	str	w2, [x1, #0]		/* WDT_MODE */
+	ldr	w3, [x1]		/* WDT_MODE */
+	orr	w3, w3, #0x10		/* keep AUTO_RESTART */
+	ldr	w2, =0x22000000		/* WDT_MODE_KEY */
+	orr	w3, w3, w2
+	bic	w3, w3, #1		/* clear ENABLE */
+	str	w3, [x1]
 	dsb	sy
 
+#ifdef FB_MARKER
 	/*
-	 * Diagnostic marker: paint the top 128 rows of every LK framebuffer
-	 * layer red.  A running shim is then visible on the panel even if UEFI
-	 * never initialises its GOP.  The base is the live
-	 * /chosen:atag,videolfb value captured from the retail device.
+	 * Optional early display marker.  Disabled by default: at this point
+	 * the MMU tables are still LK's, which on this device do not map the
+	 * 1.4 GiB bank at 0x98800000.  UEFI maps it later from the DTB.
 	 */
 	ldr	x1, =FB_BASE
 	ldr	w2, =0x00FF0000		/* BGRA8888 red */
@@ -69,6 +74,7 @@ _Start:
 	add	x1, x1, x12
 	subs	x6, x6, #1
 	b.ne	8b
+#endif
 
 	/* Clear the published pointer so a rejected DTB reads as "absent". */
 	ldr	x16, =DTB_PTR_STORE

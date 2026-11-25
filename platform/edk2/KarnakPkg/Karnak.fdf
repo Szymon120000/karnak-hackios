@@ -66,7 +66,12 @@ READ_LOCK_STATUS   = TRUE
 
   INF ArmPkg/Drivers/ArmGic/ArmGicDxe.inf
   INF ArmPkg/Drivers/TimerDxe/TimerDxe.inf
-  INF MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
+
+  # MdeModulePkg/Universal/WatchdogTimerDxe is deliberately not included.
+  # UefiBootManagerLib arms it for five minutes before launching a boot option
+  # and its expiry handler calls ResetSystem().  During bring-up that turns any
+  # slow or stuck boot into a silent warm reset, which is exactly the failure
+  # this port is chasing.  BootShim and WatchDogDxe already stop the MTK WDT.
 
   INF MediaTekPkg/Drivers/SimpleFbDxe/SimpleFbDxe.inf
   INF MediaTekPkg/Drivers/WatchDogDxe/WatchDogDxe.inf
@@ -109,6 +114,7 @@ READ_LOCK_STATUS   = TRUE
 
   # karnak platform identification / diagnostics.
   INF KarnakPkg/Drivers/KarnakInfoDxe/KarnakInfoDxe.inf
+  INF KarnakPkg/Drivers/KarnakProbeDxe/KarnakProbeDxe.inf
 
 !include $(DEVICE_DXE_FV_COMPONENTS)
 
