@@ -4,6 +4,9 @@
 #   scripts/build_lk_image.sh --stock boot-stock.img [DEBUG|RELEASE]
 #   scripts/build_lk_image.sh --kernel-addr 0x... --tags-addr 0x... [DEBUG|RELEASE]
 #
+#   Add --inject-from boot-stock.img to wrap the result in the amonet
+#   microloader stub from that backup (out/uefi-karnak-lk-injected.img).
+#
 # The addresses are read from the stock boot image (preferred) or passed
 # explicitly.  They are never guessed: a wrong kernel_addr makes LK jump into
 # random memory.
@@ -14,8 +17,9 @@ STOCK=""
 KERNEL_ADDR=""
 TAGS_ADDR=""
 PAGE_SIZE=""
+INJECT_FROM=""
 
-usage() { sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -23,6 +27,7 @@ while [[ $# -gt 0 ]]; do
     --kernel-addr)  KERNEL_ADDR="${2:-}"; shift 2 ;;
     --tags-addr)    TAGS_ADDR="${2:-}"; shift 2 ;;
     --page-size)    PAGE_SIZE="${2:-}"; shift 2 ;;
+    --inject-from)  INJECT_FROM="${2:-}"; shift 2 ;;
     -h|--help)      usage 0 ;;
     DEBUG|RELEASE)  TARGET="$1"; shift ;;
     *) echo "unknown argument: $1" >&2; usage 1 ;;
@@ -50,4 +55,11 @@ export LK_KERNEL_ADDR="$KERNEL_ADDR"
 export LK_TAGS_ADDR="$TAGS_ADDR"
 [[ -n "$PAGE_SIZE" ]] && export LK_PAGE_SIZE="$PAGE_SIZE"
 
-exec "$ROOT/scripts/build_uefi.sh" "$TARGET"
+"$ROOT/scripts/build_uefi.sh" "$TARGET"
+
+if [[ -n "$INJECT_FROM" ]]; then
+  [[ -f "$INJECT_FROM" ]] || { echo "error: no such file: $INJECT_FROM" >&2; exit 1; }
+  python3 "$ROOT/tools/inject_microloader.py" --stub-from "$INJECT_FROM" \
+    "$ROOT/out/uefi-karnak-lk.img" \
+    "$ROOT/out/uefi-karnak-lk-injected.img"
+fi

@@ -188,12 +188,17 @@ def extract(kernel: pathlib.Path) -> dict:
     fb_h = lcm.get("jd936x_height", 1280)
     fb_bpp = 32
     fb_stride = fb_w * (fb_bpp // 8)
-    # LK's fallback if /chosen lacks atag,videolfb (mtkfb.c:2260):
-    #   fb_base = 0x5fdfffff - 0x200000 - vramsize + 1
-    # The live value must come from the runtime DTB; a 16 MiB top reservation is
-    # used as the static UEFI fallback.
-    fb_top = 0x5fe00000
-    fb_reserve = 0x01000000
+    # Live values captured from a retail karnak (G0W0T8058477F0V2) with
+    #   /proc/device-tree/memory@00000000/reg
+    #     = <0x0 0x40000000 0x0 0x40000000>, <0x0 0x80000000 0x0 0x19600000>
+    #   /proc/device-tree/chosen/atag,videolfb
+    #     fb_base=0x98800000 vram=0x00E00000
+    # so the top of the framebuffer reservation is 0x99600000.  The compiled
+    # karnak.dts still only describes the 512 MiB floor; LK patches /memory and
+    # /chosen at boot.  These values are the static fallback for builds that
+    # cannot read the live blob (e.g. the fixed framebuffer PCD).
+    fb_top = 0x99600000
+    fb_reserve = 0x00e00000
 
     return {
         "source": {
@@ -244,8 +249,10 @@ def extract(kernel: pathlib.Path) -> dict:
             "format": "BGRA8888 (LK simple framebuffer, 32bpp)",
             "fb_top_fallback": fb_top,
             "fb_reserve_bytes": fb_reserve,
-            "note": ("Live fb_base/vram/lcmname are in /chosen:atag,videolfb. "
-                     "UEFI and XnuLoader must read that property."),
+            "note": ("Live fb_base/vram/lcmname are in /chosen:atag,videolfb "
+                     "(retail karnak: 0x98800000/0x00E00000). The fallback "
+                     "below is that captured value; UEFI and XnuLoader should "
+                     "still prefer the runtime property."),
         },
         "bootargs": chosen_bootargs,
         "cpu": {"cores": 4, "clusters": 1, "release_addr": 0x40000200,
@@ -353,7 +360,7 @@ def header(d: dict) -> str:
 #define KARN_FB_STRIDE                 {disp["stride"]}U
 #define KARN_FB_TOP_FALLBACK           {fmt(disp["fb_top_fallback"])}
 #define KARN_FB_RESERVE_BYTES          {fmt(disp["fb_reserve_bytes"])}
-/* TODO(VERIFY_BOOTARGS): real base/vram come from /chosen:atag,videolfb. */
+/* Verified on retail karnak via /chosen:atag,videolfb (0x98800000, 14 MiB). */
 #define KARN_FB_BASE_FALLBACK          (KARN_FB_TOP_FALLBACK - KARN_FB_RESERVE_BYTES)
 
 /* ---- Platform layout chosen for the UEFI port -----------------------

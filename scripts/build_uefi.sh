@@ -164,11 +164,16 @@ if [[ "$BOOT_HEADER_VERSION" == "0" ]]; then
   : "${LK_KERNEL_ADDR:?set LK_KERNEL_ADDR (from the stock boot.img/LK) for header v0}"
   : "${LK_TAGS_ADDR:?set LK_TAGS_ADDR (from the stock boot.img/LK) for header v0}"
   BOOT_IMG="$ROOT/out/uefi-karnak-lk.img"
+  # bootopt is consumed by LK before it enters the payload.  This is the
+  # value from the device's working 64-bit TWRP boot image; the stock boot
+  # image used 32N2 for the last cluster.
+  LK_CMDLINE="${LK_CMDLINE:-bootopt=64S3,32N2,64N2}"
   MKBOOT_ARGS=(
     --header_version 0
     --kernel_addr "$LK_KERNEL_ADDR"
     --tags_addr "$LK_TAGS_ADDR"
     --pagesize "${LK_PAGE_SIZE:-2048}"
+    --cmdline "$LK_CMDLINE"
   )
 else
   BOOT_IMG="$ROOT/out/uefi-karnak.img"

@@ -8,11 +8,11 @@
   },
   "display": {
     "bpp": 32,
-    "fb_reserve_bytes": 16777216,
-    "fb_top_fallback": 1608515584,
+    "fb_reserve_bytes": 14680064,
+    "fb_top_fallback": 2573205504,
     "format": "BGRA8888 (LK simple framebuffer, 32bpp)",
     "height": 1280,
-    "note": "Live fb_base/vram/lcmname are in /chosen:atag,videolfb. UEFI and XnuLoader must read that property.",
+    "note": "Live fb_base/vram/lcmname are in /chosen:atag,videolfb (retail karnak: 0x98800000/0x00E00000). The fallback below is that captured value; UEFI and XnuLoader should still prefer the runtime property.",
     "panel": "800x1280 portrait; Fire OS UI is rotated to 1280x800",
     "stride": 3200,
     "width": 800

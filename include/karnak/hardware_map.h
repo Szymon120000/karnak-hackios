@@ -85,9 +85,9 @@
 #define KARN_FB_HEIGHT                 1280U
 #define KARN_FB_BPP                    32U
 #define KARN_FB_STRIDE                 3200U
-#define KARN_FB_TOP_FALLBACK           0x5FE00000U
-#define KARN_FB_RESERVE_BYTES          0x01000000U
-/* TODO(VERIFY_BOOTARGS): real base/vram come from /chosen:atag,videolfb. */
+#define KARN_FB_TOP_FALLBACK           0x99600000U
+#define KARN_FB_RESERVE_BYTES          0x00E00000U
+/* Verified on retail karnak via /chosen:atag,videolfb (0x98800000, 14 MiB). */
 #define KARN_FB_BASE_FALLBACK          (KARN_FB_TOP_FALLBACK - KARN_FB_RESERVE_BYTES)
 
 /* ---- Platform layout chosen for the UEFI port -----------------------

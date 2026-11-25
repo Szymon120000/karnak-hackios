@@ -7,10 +7,13 @@
   Python `libfdt`).  Generated text is independent of whether `--kernel` was
   given as a relative or absolute path.
 - **KarnakBootShim** (`platform/edk2/KarnakPkg/BootShim/BootShim.S`):
+  - disables the MT8163 `toprgu` watchdog before the first FD instruction,
+  - paints a red band on every LK framebuffer layer as an early proof-of-life,
   - preserves LK's `x0` DTB pointer,
   - copies a validated blob to `0x4fe00000` (bounded to 1 MiB),
   - publishes the pointer at `0x4ff00000`,
-  - relocates the appended FD to `0x50000000` and branches.
+  - relocates the appended FD to `0x50000000`, cleans/invalidates caches and
+    branches.
 - **EDK2 `KarnakPkg`**:
   - GIC-400/GICv2, 13 MHz architected timer (INTID 29/30/27/26),
   - runtime memory map from the saved DTB (falls back to the DTS floor),
@@ -53,8 +56,12 @@
 - **PMIC/GPIO**: `MtkGpioImplLib` and `PmicWrapperImplLib` are bound to the
   MT6789 instances so the DSC is complete, but the drivers are not in the FV.
   A real MT8163 + MT6323 port is required for battery/keys.
-- **DRAM size**: see `docs/HARDWARE.md`. Until a live DTB proves 1.5 GB, treat
-  512 MiB as the safe floor.
+- **DRAM size**: the live DTB on a retail karnak reports two banks,
+  `0x40000000+0x40000000` and `0x80000000+0x19600000` (top `0x99600000`,
+  ~1.4 GiB usable), so the 512 MiB DTS value is only the build-time floor.
+- **Framebuffer**: `/chosen:atag,videolfb` on the same device gives
+  `fb_base=0x98800000`, `vram=0x00e00000`.  SimpleFbDxe is still driven by a
+  fixed PCD pinned to those verified values; it should read the property.
 
 ## Hardware test readiness
 
@@ -65,14 +72,20 @@ The first on-device test is the UEFI stage only (`LK -> BootShim -> EDK2`):
   `tags_addr`, both mandatory).
 - `scripts/flash_karnak.sh` validates the image, the `karnak` product string,
   the unlock state and a stock boot-image backup before writing.
-- Still blocked on the real `LK_KERNEL_ADDR`/`LK_TAGS_ADDR` values from the
-  device's stock boot image; they are not guessed.
-- `tools/boot_header.py boot-stock.img --shell` prints them (and the page
-  size).  `scripts/build_lk_image.sh --stock boot-stock.img` then builds the
-  v0 image, or dispatch the `uefi` workflow with the two addresses as inputs.
+- The retail boot image has an amonet microloader stub in `0x0..0x400` and the
+  real header at `0x400` (kernel at `0x800`).  The partition must be written
+  with that stub: `tools/inject_microloader.py --stub-from boot-stock.img`
+  (also `scripts/build_lk_image.sh --inject-from boot-stock.img`).
+- Measured LK values from the device's stock boot header:
+  `LK_KERNEL_ADDR=0x40080000`, `LK_TAGS_ADDR=0x48000000`, `LK_PAGE_SIZE=2048`.
+- First boot test reached LK's splash and then reset.  The live kernel log
+  showed `bootreason=wdt_by_pass_pwk` / "Warm Boot By HW Watchdog", which is
+  why the shim and `WatchDogDxe` now disable the watchdog.  The same log gave
+  the real framebuffer base, replacing the 512 MiB fallback.
 
-Expected on success: UEFI console/shell plus `KarnakInfoDxe` DTB/DRAM lines.
-There is no XNU kernel and no internal eMMC driver yet.
+Expected on success: a red shim band followed by the UEFI console/shell plus
+`KarnakInfoDxe` DTB/DRAM lines.  There is no XNU kernel and no internal eMMC
+driver yet.
 
 ## Boot chain checkpoints
 

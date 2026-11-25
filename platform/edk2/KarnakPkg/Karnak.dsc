@@ -57,10 +57,13 @@
   gArmPlatformTokenSpaceGuid.PcdClusterCount|1
 
   # ---- Simple framebuffer (LK 32bpp BGRA) -----------------------------
-  # TODO(VERIFY_BOOTARGS): real base/vram come from /chosen:atag,videolfb.
-  # KarnakDtbLoaderLib republishes them via PCDs at DXE time; the fixed
-  # value below is the mtkfb.c fallback for a 16 MiB top reservation.
-  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferAddress|0x5EE00000
+  # VERIFIED on a retail karnak (G0W0T8058477F0V2) via
+  # /proc/device-tree/chosen/atag,videolfb: fb_base=0x98800000,
+  # vram=0x00E00000.  SimpleFbDxe consumes these as fixed PCDs, so the live
+  # value has to be pinned here until it is converted to a DTB-driven driver.
+  # The 0x5EE00000 mtkfb.c formula only applies to the 512 MiB DTS floor and
+  # is wrong for the 1.5 GiB product.
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferAddress|0x98800000
   gMediaTekTokenSpaceGuid.PcdMipiFrameBufferWidth|800
   gMediaTekTokenSpaceGuid.PcdMipiFrameBufferHeight|1280
   gMediaTekTokenSpaceGuid.PcdMipiFrameBufferPixelBpp|32
@@ -68,7 +71,10 @@
   gMediaTekTokenSpaceGuid.PcdMipiFrameBufferVisibleHeight|1280
   gMediaTekTokenSpaceGuid.PcdMipiFrameBufferLayers|2
   gMediaTekTokenSpaceGuid.PcdWatchdogBaseAddress|0x10007000
-  gMediaTekTokenSpaceGuid.PcdWatchdogWorkingTimer|1
+  # UEFI does not need the MTK watchdog and the timer-event kicker depends on
+  # interrupts that are still being brought up.  Keep it disabled; BootShim
+  # also disables it before the first FD instruction runs.
+  gMediaTekTokenSpaceGuid.PcdWatchdogWorkingTimer|0
 
   gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemRevision|0x00000850
 

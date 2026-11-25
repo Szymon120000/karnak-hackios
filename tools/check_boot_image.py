@@ -27,7 +27,6 @@ BOOT_MAGIC = b"ANDROID!"
 ARM64_MAGIC = b"ARM\x64"
 FV_SIG = b"_FVH"
 MODERN_HEADER_PAGE = 4096              # v3/v4 header is padded to this
-SHIM_PAYLOAD_OFFSET = 0x140
 LEGACY_VERSIONS = (0, 1, 2)
 
 
@@ -86,8 +85,8 @@ def main(argv=None) -> int:
     check(len(trailing) < max(payload_offset, 4096) and trailing == b"\x00" * len(trailing),
           "unexpected non-padding data after the kernel payload")
 
-    check(len(payload) > SHIM_PAYLOAD_OFFSET + 32, "payload too small for BootShim")
-    if len(payload) > SHIM_PAYLOAD_OFFSET + 32:
+    check(len(payload) > 64, "payload too small for BootShim")
+    if len(payload) > 64:
         check(payload[0x38:0x3C] == ARM64_MAGIC,
               "BootShim does not expose the arm64 Image magic at offset 0x38")
         branch, = struct.unpack_from("<I", payload, 0)
@@ -97,15 +96,18 @@ def main(argv=None) -> int:
         check(image_size == fd_size + 0x1000,
               f"Image image_size {image_size:#x} != FD size + 4 KiB "
               f"({fd_size + 0x1000:#x})")
-        check(kernel_size == SHIM_PAYLOAD_OFFSET + fd_size,
-              f"kernel_size {kernel_size:#x} != BootShim + FD "
-              f"({SHIM_PAYLOAD_OFFSET + fd_size:#x})")
 
-    fd = payload[SHIM_PAYLOAD_OFFSET:]
-    check(len(fd) == fd_size, f"FD is {len(fd):#x} bytes, expected {fd_size:#x}")
-    check(len(fd) > 0x30, "FD too small")
-    check(fd[0x28:0x2C] == FV_SIG, "no _FVH signature at FD offset 0x28")
-    if fd[0x28:0x2C] == FV_SIG:
+    # The shim size is not recorded in the Image header, so locate the FV by
+    # its signature instead of assuming a fixed shim length.
+    fv_pos = payload.find(FV_SIG)
+    fd_offset = fv_pos - 0x28 if fv_pos >= 0 else -1
+    check(fd_offset >= 0x40, "no _FVH signature in the payload")
+    if fd_offset >= 0x40:
+        check(kernel_size == fd_offset + fd_size,
+              f"kernel_size {kernel_size:#x} != BootShim ({fd_offset:#x}) + FD "
+              f"({fd_offset + fd_size:#x})")
+        fd = payload[fd_offset:]
+        check(len(fd) == fd_size, f"FD is {len(fd):#x} bytes, expected {fd_size:#x}")
         # The FV header starts at FD offset 0: ZeroVector aliases the reset
         # branch, so FvLength is at 0x20 and Signature at 0x28.
         fv_len, = struct.unpack_from("<Q", fd, 0x20)

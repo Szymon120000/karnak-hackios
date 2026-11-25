@@ -36,6 +36,40 @@ _Start:
 	/* Save the live DTB pointer. */
 	mov	x9, x0
 
+	/*
+	 * Stop the MT8163 top reset generator watchdog.  LK arms it and the
+	 * Linux kernel is expected to keep kicking it; nothing in UEFI does.
+	 * Register offsets and magic keys come from the in-tree
+	 * MediaTekPkg/Drivers/WatchDogDxe driver and the toprgu@10007000 node
+	 * in mt8163.dtsi.
+	 */
+	ldr	x1, =WDT_BASE
+	mov	w2, #0x1971		/* WDT_RST_KEY */
+	str	w2, [x1, #8]		/* WDT_RESTART */
+	ldr	w2, =0x22000000		/* WDT_MODE_KEY, clears the enable bits */
+	str	w2, [x1, #0]		/* WDT_MODE */
+	dsb	sy
+
+	/*
+	 * Diagnostic marker: paint the top 128 rows of every LK framebuffer
+	 * layer red.  A running shim is then visible on the panel even if UEFI
+	 * never initialises its GOP.  The base is the live
+	 * /chosen:atag,videolfb value captured from the retail device.
+	 */
+	ldr	x1, =FB_BASE
+	ldr	w2, =0x00FF0000		/* BGRA8888 red */
+	ldr	x3, =(FB_WIDTH * 128)	/* pixels in the painted band */
+	ldr	x12, =(FB_WIDTH * FB_HEIGHT * 4)	/* layer stride */
+	mov	x6, #FB_LAYERS
+8:	mov	x7, x1
+	mov	x13, x3
+9:	str	w2, [x7], #4
+	subs	x13, x13, #1
+	b.ne	9b
+	add	x1, x1, x12
+	subs	x6, x6, #1
+	b.ne	8b
+
 	/* Clear the published pointer so a rejected DTB reads as "absent". */
 	ldr	x16, =DTB_PTR_STORE
 	str	xzr, [x16]
@@ -101,7 +135,25 @@ _Start:
 	b.ne	3b
 5:
 
-	/* The payload was written with the MMU off; make it visible. */
+	/*
+	 * Make the copied payload visible to instruction fetch.  LK normally
+	 * enters with the MMU and caches off, but if it leaves them on the
+	 * dirty lines must be cleaned to the point of coherency and the
+	 * instruction cache invalidated before branching.
+	 */
+	mrs	x10, ctr_el0
+	ubfx	x11, x10, #16, #4	/* DminLine, log2(words) */
+	mov	x12, #4
+	lsl	x11, x12, x11		/* bytes per cache line */
+	ldr	x4, =UEFI_BASE
+	ldr	x6, =UEFI_SIZE
+	add	x7, x4, x6
+6:	dc	civac, x4
+	add	x4, x4, x11
+	cmp	x4, x7
+	b.lo	6b
+	dsb	sy
+	ic	iallu
 	dsb	sy
 	isb
 
