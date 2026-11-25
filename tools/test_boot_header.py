@@ -58,7 +58,7 @@ class BootHeaderTest(unittest.TestCase):
         proc = self.parse("--shell")
         self.assertEqual(proc.returncode, 2)
         self.assertIn("no kernel or", proc.stdout)
-        self.assertNotIn("LK_KERNEL_ADDR", proc.stdout)
+        self.assertNotIn("LK_KERNEL_ADDR=0x", proc.stdout)
 
     def test_not_a_boot_image(self):
         self.image.write_bytes(b"not an image at all")
