@@ -10,7 +10,8 @@
 #                          Header v0 additionally requires:
 #   LK_KERNEL_ADDR=0x...   physical kernel load address used by the stock LK
 #   LK_TAGS_ADDR=0x...     tags/DTB address used by the stock LK
-#                          Both are mandatory for v0; they are never guessed.
+#   LK_PAGE_SIZE=2048      page size for v0 (from the stock boot header)
+#                          Addresses are mandatory for v0; never guessed.
 #
 # The build deliberately drives EDK2's `build` tool directly instead of the
 # stuart/edk2-pytool wrapper: KarnakPkg has no Python dependencies, and the
@@ -167,6 +168,7 @@ if [[ "$BOOT_HEADER_VERSION" == "0" ]]; then
     --header_version 0
     --kernel_addr "$LK_KERNEL_ADDR"
     --tags_addr "$LK_TAGS_ADDR"
+    --pagesize "${LK_PAGE_SIZE:-2048}"
   )
 else
   BOOT_IMG="$ROOT/out/uefi-karnak.img"

@@ -12,6 +12,17 @@ on:
       - ".github/workflows/uefi.yml"
   pull_request:
   workflow_dispatch:
+    inputs:
+      lk_kernel_addr:
+        description: "LK kernel load address, e.g. 0x40080000 (enables the v0 LK image)"
+        required: false
+      lk_tags_addr:
+        description: "LK tags/DTB address, e.g. 0x4fe00000 (enables the v0 LK image)"
+        required: false
+      lk_page_size:
+        description: "Legacy page size (default 2048)"
+        required: false
+        default: "2048"
 
 concurrency:
   group: uefi-${{ github.ref }}
@@ -30,6 +41,7 @@ jobs:
         run: |
           python3 tools/test_check_boot_image.py
           python3 tools/test_mkbootimg.py
+          python3 -m py_compile tools/boot_header.py tools/apply_xnu_patches.py
           bash -n tools/probe_karnak.sh scripts/*.sh
 
       - name: Install host dependencies
@@ -54,6 +66,21 @@ jobs:
 
       - name: Build firmware and boot image
         run: ./scripts/build_uefi.sh DEBUG
+
+      - name: Build LK v0 boot image
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.lk_kernel_addr != '' && inputs.lk_tags_addr != '' }}
+        env:
+          LK_KERNEL_ADDR: ${{ inputs.lk_kernel_addr }}
+          LK_TAGS_ADDR: ${{ inputs.lk_tags_addr }}
+          LK_PAGE_SIZE: ${{ inputs.lk_page_size }}
+        run: |
+          set -e
+          for value in "$LK_KERNEL_ADDR" "$LK_TAGS_ADDR"; do
+            [[ "$value" =~ ^0x[0-9a-fA-F]+$ ]] || {
+              echo "error: '$value' is not a 0x-prefixed address" >&2; exit 1; }
+          done
+          ./scripts/build_lk_image.sh --kernel-addr "$LK_KERNEL_ADDR" \
+            --tags-addr "$LK_TAGS_ADDR" --page-size "${LK_PAGE_SIZE:-2048}" DEBUG
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
