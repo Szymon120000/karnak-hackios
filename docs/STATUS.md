@@ -43,12 +43,14 @@
   The GIC-400 (GICv2) driver, the architected timer as PPI 27, and PSCI/SMP
   with SGI 1 are implemented in `0003` and `KarnakCPU.cpp`; a bootable XNU
   still needs A53 errata handling and an MSDC0 block driver (no UFS on this
-  SoC), and none of the new code has been compiled by an XNU build yet.
-  Tracked in `xnu/README.md`.
+  SoC).  The board code is compiled by the macOS CI job; track the linked
+  kernel and hardware boot in `xnu/README.md`.
 - **XNU patch series**: `scripts/stage_xnu.sh` fetches the pinned
-  `xnu-8796.141.3` tag, copies the overlay and applies five reviewed patches;
-  CI stages a real tree and re-runs the staging to prove idempotence.  The
-  patches apply cleanly but have not been compiled by an XNU build yet.
+  `xnu-8796.141.3` tag, copies the overlay (including
+  `config/MASTER.arm64.karnak`) and applies five reviewed patches; CI stages a
+  real tree and re-runs the staging to prove idempotence.  The board code
+  compiles in the macOS job; a linked kernel and hardware boot are still
+  pending.
 - **XnuLoader**: the Mach-O parser, the `boot_args` builder (`KarnakBootArgsLib`,
   layout asserted against Apple's xnu-8796 arm64 header), the segment copy and
   the `ExitBootServices` / MMU-off handoff (`KarnakHandoffLib`) exist.  The

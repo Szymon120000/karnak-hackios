@@ -10,6 +10,10 @@ and `zekasio/beyond2lte-ios`).
 
 This directory contains:
 
+- `overlay/config/MASTER.arm64.karnak` — the kernel configuration.  It is
+  `MASTER.arm64.MacOSX` with `nos_arm_asm nos_arm_pmap` (so the open-source
+  arm64 assembly and pmap are linked instead of Apple's arm64e KDK library)
+  and without `kpc` (which programs Apple's PMU).
 - `overlay/pexpert/pexpert/arm64/KARNAK.h` — board constants, standalone and
   host-testable (`tests/board_static_test.c`).
 - `overlay/pexpert/arm64/karnak_early.{c,h}` — polled UART0 console.  It

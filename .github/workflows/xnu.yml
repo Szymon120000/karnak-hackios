@@ -96,6 +96,8 @@ jobs:
           set -e
           grep -q 'MACHINE_FLAGS_ARM64_KARNAK' vendor/xnu/makedefs/MakeInc.def
           grep -q 'ARM64_BOARD_CONFIG_KARNAK' vendor/xnu/pexpert/pexpert/arm64/board_config.h
+          grep -q 'nos_arm_asm nos_arm_pmap' vendor/xnu/config/MASTER.arm64.karnak
+          test -f vendor/xnu/config/MASTER.arm64.karnak
           grep -q 'KARNAK_UART' vendor/xnu/pexpert/arm/pe_serial.c
           grep -q 'karnak_early.c' vendor/xnu/pexpert/conf/files.arm64
           grep -q 'karnak_gicv2_init_cpu' vendor/xnu/pexpert/arm/pe_fiq.c
