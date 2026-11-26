@@ -13,7 +13,8 @@ This directory contains:
 - `overlay/config/MASTER.arm64.karnak` — the kernel configuration.  It is
   `MASTER.arm64.MacOSX` with `nos_arm_asm nos_arm_pmap` (so the open-source
   arm64 assembly and pmap are linked instead of Apple's arm64e KDK library)
-  and without `kpc` (which programs Apple's PMU).
+  and with `kperf`/`kpc` kept, because XNU does not build without kperf; the
+  kpc backend is a countable no-op on non-Apple hardware.
 - `overlay/pexpert/pexpert/arm64/KARNAK.h` — board constants, standalone and
   host-testable (`tests/board_static_test.c`).
 - `overlay/pexpert/arm64/karnak_early.{c,h}` — polled UART0 console.  It
@@ -36,7 +37,11 @@ This directory contains:
   an Apple `state` property (and it exposes `cpu_signal_handler` to the KARNAK
   IRQ path); `0004` backports the `IORPC.kernelContent` field
   that Xcode 16's `iig` generates code against; `0005` applies the Xcode 16
-  `UIO_STACKBUF` fix and gives the non-PAC pmap a distinct spare field.
+  `UIO_STACKBUF` fix and gives the non-PAC pmap a distinct spare field;
+  `0006` fills the gaps left by Apple's closed per-SoC library for the
+  open-source pmap/assembly path (pmap preemption/lockdown symbols, cache
+  asm labels, the no-op monitor hook).  The overlay also provides the missing
+  AMCC/SART/UAT/tunables no-ops and a kpc backend that reports no counters.
 - `include/pexpert/...` — vendored xnu-8796 arm64 `boot.h` used only by the
   host test that asserts the firmware `boot_args` layout (see the README there).
 - `tests/boot_args_test.c` — verifies `KarnakBootArgsLib` (in XnuLoaderPkg)
