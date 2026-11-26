@@ -36,7 +36,7 @@
 #define KARN_UEFI_VECTOR_BASE     0x50840000ULL
 #define KARN_UEFI_VECTOR_SIZE     0x00010000ULL
 #define KARN_UEFI_POOL_BASE       0x50850000ULL
-#define KARN_UEFI_POOL_SIZE       0x02000000ULL
+#define KARN_UEFI_POOL_SIZE       0x08000000ULL
 /* Verified on a retail karnak via /chosen:atag,videolfb; only used when the
  * live device tree is unavailable. */
 #define KARN_FB_FALLBACK_BASE     0x98800000ULL

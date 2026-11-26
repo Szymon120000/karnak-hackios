@@ -108,7 +108,7 @@
 #define KARN_UEFI_VECTOR_BASE          0x50840000U
 #define KARN_UEFI_VECTOR_SIZE          0x00010000U
 #define KARN_UEFI_POOL_BASE            0x50850000U
-#define KARN_UEFI_POOL_SIZE            0x02000000U
+#define KARN_UEFI_POOL_SIZE            0x08000000U
 
 /* ---- CPU ------------------------------------------------------------- */
 #define KARN_CPU_CORES                 4U

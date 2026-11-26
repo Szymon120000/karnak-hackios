@@ -381,7 +381,7 @@ def header(d: dict) -> str:
 #define KARN_UEFI_VECTOR_BASE          {fmt(0x50840000)}
 #define KARN_UEFI_VECTOR_SIZE          {fmt(0x00010000)}
 #define KARN_UEFI_POOL_BASE            {fmt(0x50850000)}
-#define KARN_UEFI_POOL_SIZE            {fmt(0x02000000)}
+#define KARN_UEFI_POOL_SIZE            {fmt(0x08000000)}
 
 /* ---- CPU ------------------------------------------------------------- */
 #define KARN_CPU_CORES                 {d["cpu"]["cores"]}U

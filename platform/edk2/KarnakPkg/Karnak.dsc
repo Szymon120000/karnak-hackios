@@ -40,7 +40,7 @@
   gEmbeddedTokenSpaceGuid.PcdPrePiStackBase|0x50800000
   gEmbeddedTokenSpaceGuid.PcdPrePiStackSize|0x00040000
   gMediaTekTokenSpaceGuid.PcdUefiMemPoolBase|0x50850000
-  gMediaTekTokenSpaceGuid.PcdUefiMemPoolSize|0x02000000
+  gMediaTekTokenSpaceGuid.PcdUefiMemPoolSize|0x08000000
 
   # ---- GIC-400 (DTS interrupt-controller@10221000) --------------------
   gArmTokenSpaceGuid.PcdGicDistributorBase|0x10221000
