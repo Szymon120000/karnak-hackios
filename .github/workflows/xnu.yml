@@ -104,6 +104,8 @@ jobs:
           grep -q 'karnak_cpu_signal_is_enabled' vendor/xnu/osfmk/arm64/cpu.c
           grep -q 'ml_is_boot_cpu' vendor/xnu/osfmk/arm64/machine_routines.c
           grep -q 'KarnakCPU.cpp' vendor/xnu/iokit/conf/files.arm64
+          grep -q 'kernelContent' vendor/xnu/iokit/IOKit/IORPC.h
+          grep -q 'kernelContent' vendor/xnu/iokit/DriverKit/IORPC.h
           test -f vendor/xnu/pexpert/pexpert/arm64/KARNAK.h
           test -f vendor/xnu/pexpert/arm64/board_mt8163.c
           test -f vendor/xnu/iokit/Kernel/arm/KarnakCPU.cpp
@@ -113,8 +115,9 @@ jobs:
         run: ./scripts/stage_xnu.sh
 
   kernel:
-    # macos-14 still ships Xcode 15.x: its iig matches the xnu-8796 IORPC ABI.
-    runs-on: macos-14
+    # macos-14 is retired.  macos-15 ships Xcode 16, whose iig emits
+    # IORPC.kernelContent; 0004 backports the field that xnu-10063 added.
+    runs-on: macos-15
     timeout-minutes: 120
     if: ${{ inputs.build_kernel == true }}
     env:

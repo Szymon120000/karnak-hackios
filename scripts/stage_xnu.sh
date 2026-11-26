@@ -9,12 +9,21 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-XNU_DIR="${1:-$ROOT/vendor/xnu}"
 CHECK=0
-for arg in "${@:2}"; do
+XNU_DIR="$ROOT/vendor/xnu"
+have_dir=0
+for arg in "$@"; do
   case "$arg" in
     --check) CHECK=1 ;;
-    *) echo "unknown option: $arg" >&2; exit 2 ;;
+    -*) echo "unknown option: $arg" >&2; exit 2 ;;
+    *)
+      if [[ "$have_dir" -eq 1 ]]; then
+        echo "error: more than one XNU directory given" >&2
+        exit 2
+      fi
+      XNU_DIR="$arg"
+      have_dir=1
+      ;;
   esac
 done
 

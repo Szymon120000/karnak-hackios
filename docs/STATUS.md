@@ -46,7 +46,7 @@
   SoC), and none of the new code has been compiled by an XNU build yet.
   Tracked in `xnu/README.md`.
 - **XNU patch series**: `scripts/stage_xnu.sh` fetches the pinned
-  `xnu-8796.141.3` tag, copies the overlay and applies three reviewed patches;
+  `xnu-8796.141.3` tag, copies the overlay and applies four reviewed patches;
   CI stages a real tree and re-runs the staging to prove idempotence.  The
   patches apply cleanly but have not been compiled by an XNU build yet.
 - **XnuLoader**: the Mach-O parser, the `boot_args` builder (`KarnakBootArgsLib`,

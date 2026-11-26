@@ -29,7 +29,8 @@ This directory contains:
   `files.arm64` and calls it from `pe_init.c`/`pe_serial.c`; `0003` adds the
   GIC-400 (GICv2) interrupt controller, the architected timer as PPI 27, the
   PSCI secondary entry point and the `ml_is_boot_cpu` fallback for DTBs without
-  an Apple `state` property.
+  an Apple `state` property; `0004` backports the `IORPC.kernelContent` field
+  that Xcode 16's `iig` generates code against.
 - `include/pexpert/...` — vendored xnu-8796 arm64 `boot.h` used only by the
   host test that asserts the firmware `boot_args` layout (see the README there).
 - `tests/boot_args_test.c` — verifies `KarnakBootArgsLib` (in XnuLoaderPkg)
@@ -97,9 +98,11 @@ the real staging and then re-runs it to prove idempotence.
 The full build still needs macOS + a KDK.  `xnu.yml`'s `kernel` job (manual:
 set `build_kernel` when dispatching) fetches `blacktop/darwin-xnu-build` at a
 pinned commit, stages this tree into `dxb/xnu` with `scripts/stage_xnu.sh`,
-and builds with `MACHINE_CONFIG=KARNAK`.  Xcode 15 (macos-14) is required for
-the iig/IORPC ABI of xnu-8796; the job builds plain arm64 (no arm64e slice)
-because the Cortex-A53 has no pointer authentication.
+and builds with `MACHINE_CONFIG=KARNAK`.  It runs on `macos-15`/Xcode 16;
+`0004` supplies the `IORPC.kernelContent` field that this Xcode's `iig`
+generates code against (the retired macos-14 runner had Xcode 15 and needed no
+such backport).  The job builds plain arm64 (no arm64e slice) because the
+Cortex-A53 has no pointer authentication.
 
 `xnu.yml` also runs the host-side board, early-console, boot_args and Mach-O
 tests plus the patch-series check on every push.  The kernel job does not
