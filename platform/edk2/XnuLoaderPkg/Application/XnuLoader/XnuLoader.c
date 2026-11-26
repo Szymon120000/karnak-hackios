@@ -26,7 +26,6 @@
 #include <Library/KarnakHandoffLib.h>
 #include <Library/XnuImageLib.h>
 
-#define XNU_KERNEL_PATH        L"\\xnu\\kernelcache"
 #define XNU_MAX_IMAGE_BYTES    (96ULL * 1024 * 1024)
 #define FDT_MAGIC              0xD00DFEEDU
 
@@ -382,6 +381,15 @@ UefiMain (
   UINTN                       ImageSize;
   XNU_IMAGE_INFO              Info;
   UINT32                      I;
+  UINTN                       PathIndex;
+  CONST CHAR16               *KernelPath;
+  STATIC CONST CHAR16 *mKernelPaths[] = {
+    /* The real layout: a kernel under /xnu on the boot partition. */
+    L"\\xnu\\kernelcache",
+    /* FvSimpleFileSystem has no directories; the self-test kernel is a
+       root-level FV file. */
+    L"\\kernelcache",
+  };
 
   Status = gBS->HandleProtocol (
                   ImageHandle,
@@ -407,9 +415,23 @@ UefiMain (
     return Status;
   }
 
-  Status = Root->Open (Root, &File, XNU_KERNEL_PATH, EFI_FILE_MODE_READ, 0);
-  if (EFI_ERROR (Status)) {
-    Print (L"XnuLoader: %s not found (%r)\n", XNU_KERNEL_PATH, Status);
+  KernelPath = NULL;
+  Status     = EFI_NOT_FOUND;
+  for (PathIndex = 0; PathIndex < ARRAY_SIZE (mKernelPaths); PathIndex++) {
+    Status = Root->Open (
+                   Root, &File, (CHAR16 *)mKernelPaths[PathIndex],
+                   EFI_FILE_MODE_READ, 0
+                   );
+    if (!EFI_ERROR (Status)) {
+      KernelPath = mKernelPaths[PathIndex];
+      break;
+    }
+  }
+
+  if (KernelPath == NULL) {
+    Print (L"XnuLoader: no \\xnu\\kernelcache or \\kernelcache on this volume (%r)\n",
+           Status);
+    Root->Close (Root);
     return Status;
   }
 
@@ -417,20 +439,20 @@ UefiMain (
   File->Close (File);
   Root->Close (Root);
   if (EFI_ERROR (Status)) {
-    Print (L"XnuLoader: cannot read %s (%r)\n", XNU_KERNEL_PATH, Status);
+    Print (L"XnuLoader: cannot read %s (%r)\n", KernelPath, Status);
     return Status;
   }
 
   Status = XnuImageParse (Image, ImageSize, &Info);
   if (EFI_ERROR (Status)) {
     Print (L"XnuLoader: %s is not a usable ARM64 Mach-O (%r)\n",
-           XNU_KERNEL_PATH, Status);
+           KernelPath, Status);
     FreePool (Image);
     return Status;
   }
 
   Print (L"XnuLoader: %s, %u bytes, %u segments\n",
-         XNU_KERNEL_PATH, ImageSize, Info.SegmentCount);
+         KernelPath, ImageSize, Info.SegmentCount);
   Print (L"  VM 0x%lx..0x%lx, file %lu bytes, VM %lu bytes\n",
          Info.ImageBase, Info.ImageEnd, Info.FileBytes, Info.VmBytes);
   for (I = 0; I < Info.SegmentCount; I++) {

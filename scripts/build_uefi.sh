@@ -47,6 +47,13 @@ if [[ "${SKIP_FETCH:-0}" != "1" ]]; then
 fi
 "$ROOT/scripts/stage_edk2.sh" "$EDK2_DIR"
 
+# Build the synthetic ARM64 Mach-O kernel used by the loader bring-up test.
+# Karnak.fdf embeds it in the FV, so it has to exist before GenFds runs.
+# (PcdKarnakSyntheticKernelTest decides whether anything launches XnuLoader.)
+SYNTH_DIR="$EDK2_DIR/Platform/Amazon/KarnakPkg/Test/SyntheticKernel"
+CROSS_COMPILE="${CROSS_COMPILE:-aarch64-linux-gnu-}" \
+  "$ROOT/tools/build_synthetic_kernel.sh" "$SYNTH_DIR"
+
 # Reject stale generated hardware values before spending minutes compiling.
 if python3 -c 'import libfdt' >/dev/null 2>&1; then
   python3 "$ROOT/tools/extract_karnak_hw.py" \

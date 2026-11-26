@@ -49,10 +49,12 @@
   patches apply cleanly but have not been compiled by an XNU build yet.
 - **XnuLoader**: the Mach-O parser, the `boot_args` builder (`KarnakBootArgsLib`,
   layout asserted against Apple's xnu-8796 arm64 header), the segment copy and
-  the `ExitBootServices` / MMU-off handoff (`KarnakHandoffLib`) exist.  A
-  `\xnu\kernelcache` would now be copied to allocator-provided memory and
-  entered; no kernel built for karnak exists yet, so there is nothing to boot.
-  The loader is still not placed in the FV.
+  the `ExitBootServices` / MMU-off handoff (`KarnakHandoffLib`) exist.  The
+  application is in the FV; it opens `\xnu\kernelcache` (or a root-level
+  `\kernelcache`), parses it (including `LC_UNIXTHREAD`, which real XNU kernels
+  use), copies every loadable segment to allocator-provided memory, builds
+  `boot_args` and enters it.  No kernel built for karnak exists yet; the path
+  is proved end-to-end on hardware with a synthetic Mach-O (see below).
 - **UEFI exception level**: MediaTek PrePi runs at **EL2** (it sets
   `HCR_EL2.TGE`).  `KarnakXnuHandoff` clears `TGE`/`E2H`, programs an EL1 state
   with `SCTLR_EL1.M/C/I = 0` and returns through `ELR_EL2`/`SPSR_EL2`.  This is
@@ -97,7 +99,8 @@ The first on-device test is the UEFI stage only (`LK -> BootShim -> EDK2`):
   `PcdKarnakBringupMarkers=TRUE` the probe also draws solid
   buffer-to-video squares and an 8x8 `A` glyph; the Shell clears them when it
   starts, which is expected.
-  The shim's framebuffer write is BGRA8888 (opaque red is `0xFF0000FF`).
+  The panel scans bytes R,G,B,A; a little-endian word is `0xAABBGGRR`, so
+  opaque red is `0xFF0000FF`.
 - Verified on hardware (handoff): with `PcdKarnakHandoffSelfTest=TRUE` the
   probe builds a real `boot_args` block at `ReadyToBoot`, calls
   `ExitBootServices`, and branches through `KarnakXnuHandoff` to
@@ -107,6 +110,16 @@ The first on-device test is the UEFI stage only (`LK -> BootShim -> EDK2`):
   cache cleaning, MMU-off entry and direct physical framebuffer writes.  A
   self-test build intentionally stops there (no Shell); power-cycle to
   recover.
+- Verified on hardware (loader end-to-end): with
+  `PcdKarnakSyntheticKernelTest=TRUE` the probe loads `XnuLoader.efi` from the
+  FV at `ReadyToBoot`.  The loader opens the named FV file `kernelcache`
+  through `EFI_FILE_PROTOCOL`, parses it as an ARM64 Mach-O with
+  `LC_UNIXTHREAD`, copies its `__TEXT` segment, builds real `boot_args`, calls
+  `ExitBootServices` and enters the copy with the MMU/caches off.  The
+  synthetic payload paints white (entry reached), a cyan band (this is the
+  loaded image, not the probe payload) and green (boot_args valid, EL1).  This
+  covers the complete file -> parse -> copy -> handoff path that a real
+  kernelcache will use.  Power-cycle to recover from a test build.
 - `tools/check_boot_image.py` enforces the appended DTB and the ramdisk FD for
   v0 images; `tools/test_extract_dtb.py` and `tools/test_check_boot_image.py`
   cover both layouts.

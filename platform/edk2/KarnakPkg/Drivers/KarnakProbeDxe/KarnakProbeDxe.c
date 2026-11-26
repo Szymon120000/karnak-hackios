@@ -27,6 +27,7 @@
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
+#include <Library/DxeServicesLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/PcdLib.h>
 #include <Library/UefiBootServicesTableLib.h>
@@ -40,6 +41,12 @@
 #include <Library/KarnakHandoffLib.h>
 
 #define FDT_MAGIC  0xD00DFEEDU
+
+/* Keep in sync with XnuLoaderPkg/Application/XnuLoader/XnuLoader.inf. */
+STATIC EFI_GUID mXnuLoaderFileGuid = {
+  0x5B0E7C2A, 0x4D19, 0x4C61,
+  { 0x9F, 0x3E, 0x2A, 0x8D, 0x6B, 0x1C, 0x0E, 0x77 }
+};
 
 STATIC EFI_EVENT  mEndOfDxeEvent;
 STATIC EFI_EVENT  mReadyToBootEvent;
@@ -322,6 +329,51 @@ RunHandoffSelfTest (
 
 STATIC
 VOID
+RunSyntheticKernelTest (
+  VOID
+  )
+{
+  EFI_STATUS                Status;
+  EFI_DEVICE_PATH_PROTOCOL *DevicePath;
+  EFI_HANDLE                AppHandle;
+
+  Print (L"KarnakProbe: synthetic kernel test: loading XnuLoader.efi\n");
+
+  DevicePath = NULL;
+  Status     = GetFileDevicePathFromAnyFv (
+                 &mXnuLoaderFileGuid,
+                 EFI_SECTION_PE32,
+                 0,
+                 &DevicePath
+                 );
+  if (EFI_ERROR (Status)) {
+    Print (L"KarnakProbe: XnuLoader.efi is not in any FV (%r)\n", Status);
+    return;
+  }
+
+  AppHandle = NULL;
+  Status    = gBS->LoadImage (
+                     FALSE,
+                     mImageHandle,
+                     DevicePath,
+                     NULL,
+                     0,
+                     &AppHandle
+                     );
+  FreePool (DevicePath);
+  if (EFI_ERROR (Status)) {
+    Print (L"KarnakProbe: LoadImage(XnuLoader) failed (%r)\n", Status);
+    return;
+  }
+
+  /* XnuLoader does not return on success: it ends boot services and enters
+     the synthetic kernel, which paints the panel and hangs. */
+  Status = gBS->StartImage (AppHandle, NULL, NULL);
+  Print (L"KarnakProbe: XnuLoader returned (%r)\n", Status);
+}
+
+STATIC
+VOID
 EFIAPI
 ReadyToBootNotify (
   IN EFI_EVENT Event,
@@ -347,6 +399,11 @@ ReadyToBootNotify (
 
   PrintBanner (L"KARNAK READY TO BOOT V5\r\n", EFI_WHITE | EFI_BACKGROUND_BLUE);
 
+  if (FixedPcdGetBool (PcdKarnakSyntheticKernelTest)) {
+    RunSyntheticKernelTest ();
+    return;
+  }
+
   if (FixedPcdGetBool (PcdKarnakHandoffSelfTest) && (Gop != NULL)) {
     RunHandoffSelfTest (Gop);
   }
@@ -368,7 +425,10 @@ KarnakProbeDxeEntry (
   (VOID)SystemTable;
   mImageHandle = ImageHandle;
 
-  if (!FixedPcdGetBool (PcdKarnakBringupMarkers)) {
+  if (!FixedPcdGetBool (PcdKarnakBringupMarkers) &&
+      !FixedPcdGetBool (PcdKarnakHandoffSelfTest) &&
+      !FixedPcdGetBool (PcdKarnakSyntheticKernelTest))
+  {
     return EFI_SUCCESS;
   }
 

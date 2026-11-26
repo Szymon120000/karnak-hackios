@@ -119,6 +119,17 @@ READ_LOCK_STATUS   = TRUE
   INF KarnakPkg/Drivers/KarnakInfoDxe/KarnakInfoDxe.inf
   INF KarnakPkg/Drivers/KarnakProbeDxe/KarnakProbeDxe.inf
 
+  # Last UEFI stage before XNU (also used by the synthetic kernel test).
+  INF XnuLoaderPkg/Application/XnuLoader/XnuLoader.inf
+
+  # Synthetic kernel for the loader end-to-end test.  A UI section gives it a
+  # name, so FvSimpleFileSystem exposes it as the root-level file
+  # "kernelcache"; XnuLoader opens it through EFI_FILE_PROTOCOL.
+  FILE FREEFORM = 3E5B1C7A-2D94-4F0B-A6E1-8C4D9B2A5F30 {
+    SECTION UI = "kernelcache"
+    SECTION RAW = Platform/Amazon/KarnakPkg/Test/SyntheticKernel/kernelcache
+  }
+
 !include $(DEVICE_DXE_FV_COMPONENTS)
 
 [FV.FVMAIN_COMPACT]

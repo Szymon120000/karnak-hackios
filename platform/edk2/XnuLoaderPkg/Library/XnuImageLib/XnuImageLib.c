@@ -14,6 +14,13 @@
 #define SEGMENT_COMMAND_64    72U    /* sizeof(struct segment_command_64) */
 #define ENTRY_POINT_COMMAND   24U    /* sizeof(struct entry_point_command) */
 
+/* <mach/arm/thread_status.h>: ARM_THREAD_STATE64 has 34 64-bit registers
+   (x0-x28, fp, lr, sp, pc, cpsr) and its count is expressed in 32-bit words. */
+#define ARM_THREAD_STATE64          6U
+#define ARM_THREAD_STATE64_COUNT    68U
+#define ARM_THREAD_STATE64_PC_INDEX 32U
+#define UNIXTHREAD_COMMAND_HEADER   16U   /* cmd, cmdsize, flavor, count */
+
 /* Load command numbers we can safely ignore: they carry metadata, not bytes
    to be copied.  Anything else that describes memory is rejected. */
 #define LC_UUID               0x1BU
@@ -258,9 +265,37 @@ XnuImageParse (
       Parsed.EntryPoint = Parsed.Segment[0].VmAddr + ReadLe64 (Base + CmdOff + 8);
       Parsed.HasEntry   = TRUE;
     } else if (Cmd == XNU_LC_UNIXTHREAD) {
-      /* entry state is platform specific; the loader prefers LC_MAIN */
-      if (CmdSize < 16) {
+      /*
+       * XNU kernelcaches start through LC_UNIXTHREAD rather than LC_MAIN.
+       * Accept only the ARM64 thread state we know how to read, and only
+       * when LC_MAIN has not already given us an entry point.
+       */
+      UINT32 Flavor;
+      UINT32 Count;
+      UINT64 PcOffset;
+
+      if (CmdSize < UNIXTHREAD_COMMAND_HEADER) {
         return EFI_VOLUME_CORRUPTED;
+      }
+
+      Flavor = ReadLe32 (Base + CmdOff + 8);
+      Count  = ReadLe32 (Base + CmdOff + 12);
+      if ((Flavor != ARM_THREAD_STATE64) ||
+          (Count < ARM_THREAD_STATE64_COUNT))
+      {
+        return EFI_UNSUPPORTED;
+      }
+
+      /* 34 registers, pc is the 33rd. */
+      PcOffset = (UINT64)UNIXTHREAD_COMMAND_HEADER +
+                 (UINT64)ARM_THREAD_STATE64_PC_INDEX * 8;
+      if (PcOffset + 8 > CmdSize) {
+        return EFI_VOLUME_CORRUPTED;
+      }
+
+      if (!Parsed.HasEntry) {
+        Parsed.EntryPoint = ReadLe64 (Base + CmdOff + PcOffset);
+        Parsed.HasEntry   = TRUE;
       }
     } else if (Cmd == XNU_LC_THREAD) {
       return EFI_UNSUPPORTED;

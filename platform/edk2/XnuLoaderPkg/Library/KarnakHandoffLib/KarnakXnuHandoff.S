@@ -198,11 +198,11 @@ KarnakHandoffTestPayload:
 	b	.Lpayload_fill
 
 .Lpayload_el2:
-	ldr	w9, =0xFFFFFF00			/* yellow: still EL2 */
+	ldr	w9, =0xFF00FFFF			/* yellow: still EL2 */
 	b	.Lpayload_fill
 
 .Lpayload_bad_args:
-	ldr	w9, =0xFFFF0000			/* red: boot_args wrong */
+	ldr	w9, =0xFF0000FF			/* red: boot_args wrong */
 
 .Lpayload_fill:
 	KARNAK_FILL_ROWS 200, (KARN_FB_HEIGHT - 200)

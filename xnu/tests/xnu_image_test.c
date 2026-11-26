@@ -255,6 +255,50 @@ TestBssAndRounding (void)
   CHECK (info.ImageEnd == 0xFFFFFFF00700C000ULL);
 }
 
+/* Append an LC_UNIXTHREAD load command carrying an ARM64 thread state. */
+static size_t
+AddUnixThread (
+  unsigned char *p,
+  uint64_t       pc
+  )
+{
+  memset (p, 0, 288);
+  Put32 (p, XNU_LC_UNIXTHREAD);
+  Put32 (p + 4, 288);
+  Put32 (p + 8, 6);            /* ARM_THREAD_STATE64 */
+  Put32 (p + 12, 68);          /* count in 32-bit words */
+  Put64 (p + 16 + 32 * 8, pc);
+  return 288;
+}
+
+static void
+TestUnixThreadEntry (void)
+{
+  unsigned char  buf[0x4000];
+  XNU_IMAGE_INFO info;
+  size_t         off;
+
+  (void)BuildImage (buf, sizeof (buf));
+  off = 32 + 72 + 72 + 72;     /* where BuildImage put LC_MAIN */
+  (void)AddUnixThread (buf + off, 0xFFFFFFF007004100ULL);
+  Put32 (buf + 16, 4);
+  Put32 (buf + 20, (uint32_t)(off + 288 - 32));
+
+  CHECK (XnuImageParse (buf, sizeof (buf), &info) == EFI_SUCCESS);
+  CHECK (info.HasEntry);
+  CHECK (info.EntryPoint == 0xFFFFFFF007004100ULL);
+
+  /* A non-ARM64 thread state is rejected, not silently ignored. */
+  Put32 (buf + off + 8, 4);    /* x86_THREAD_STATE64 */
+  CHECK (XnuImageParse (buf, sizeof (buf), &info) == EFI_UNSUPPORTED);
+
+  /* A truncated state must not be read past the command. */
+  Put32 (buf + off + 8, 6);
+  Put32 (buf + off + 12, 68);
+  Put32 (buf + off + 4, 16 + 32 * 8);
+  CHECK (XnuImageParse (buf, sizeof (buf), &info) == EFI_VOLUME_CORRUPTED);
+}
+
 int
 main (void)
 {
@@ -267,6 +311,7 @@ main (void)
   TestMisalignedCommandSize ();
   TestCorruptCounts ();
   TestBssAndRounding ();
+  TestUnixThreadEntry ();
 
   if (failures) {
     printf ("%d test(s) failed\n", failures);

@@ -24,6 +24,7 @@
   BaseLib
   BaseMemoryLib
   DebugLib
+  DxeServicesLib
   MemoryAllocationLib
   PcdLib
   UefiBootServicesTableLib
@@ -43,6 +44,7 @@
 [FixedPcd]
   gKarnakPkgTokenSpaceGuid.PcdKarnakBringupMarkers
   gKarnakPkgTokenSpaceGuid.PcdKarnakHandoffSelfTest
+  gKarnakPkgTokenSpaceGuid.PcdKarnakSyntheticKernelTest
 
 [Depex]
   gEfiGraphicsOutputProtocolGuid

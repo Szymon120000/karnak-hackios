@@ -64,7 +64,7 @@ _Start:
 	 * the marker is invisible.
 	 */
 	ldr	x1, =FB_BASE
-	ldr	w2, =0xFF0000FF		/* BGRA8888 opaque red */
+	ldr	w2, =0xFF0000FF		/* RGBA byte order: opaque red */
 	ldr	x3, =(FB_WIDTH * 128)	/* pixels in the painted band */
 	ldr	x12, =(FB_WIDTH * FB_HEIGHT * 4)	/* layer stride */
 	mov	x6, #FB_LAYERS

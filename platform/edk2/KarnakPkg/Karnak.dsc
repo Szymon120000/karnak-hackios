@@ -85,6 +85,9 @@
   # ReadyToBoot.  That intentionally ends the boot (no shell) and paints the
   # result: white + green means boot_args valid and the CPU reached EL1.
   gKarnakPkgTokenSpaceGuid.PcdKarnakHandoffSelfTest|FALSE
+  # Bring-up only: at ReadyToBoot, load XnuLoader.efi and boot the synthetic
+  # kernelcache embedded in the FV.  Proves file -> parse -> copy -> handoff.
+  gKarnakPkgTokenSpaceGuid.PcdKarnakSyntheticKernelTest|FALSE
 
 [LibraryClasses.common]
   # karnak overrides: generated-from-DTS UART console and FDT access.
@@ -126,6 +129,7 @@
   # Bring-up probe: colour pattern once the GOP exists (see PCD above).
   KarnakPkg/Drivers/KarnakProbeDxe/KarnakProbeDxe.inf
 
-  # Built and linked, but not placed in the FV: it refuses to boot until the
-  # boot_args handoff exists.  Keeping it in [Components] makes CI compile it.
+  # The last UEFI stage before XNU.  It is placed in the FV so the synthetic
+  # kernel test (PcdKarnakSyntheticKernelTest) can launch it; on a normal boot
+  # nothing invokes it yet.
   XnuLoaderPkg/Application/XnuLoader/XnuLoader.inf

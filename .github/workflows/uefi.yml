@@ -42,8 +42,11 @@ jobs:
           python3 tools/test_check_boot_image.py
           python3 tools/test_mkbootimg.py
           python3 tools/test_boot_header.py
-          python3 -m py_compile tools/boot_header.py tools/apply_xnu_patches.py
-          bash -n tools/probe_karnak.sh scripts/*.sh
+          python3 tools/test_mk_macho.py
+          python3 tools/test_extract_dtb.py
+          python3 -m py_compile tools/boot_header.py tools/apply_xnu_patches.py \
+            tools/mk_macho.py
+          bash -n tools/probe_karnak.sh tools/build_synthetic_kernel.sh scripts/*.sh
 
       - name: Install host dependencies
         run: |

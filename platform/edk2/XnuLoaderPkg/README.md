@@ -45,12 +45,29 @@ starting the Shell).  **Verified on hardware:** white + green, so
 `ExitBootServices`, the EL2 -> EL1 drop, MMU/cache-off and direct framebuffer
 writes all work on this tablet.
 
-`Application/XnuLoader` is built by `Karnak.dsc` but **not** placed in the FV.
-When a `\xnu\kernelcache` exists on the boot volume it parses the image,
-allocates a destination from the UEFI allocator, copies every loadable segment,
-builds `boot_args` (DTB from the shim, video from GOP, DRAM from the DTS floor),
-and calls the same handoff.  It returns `EFI_UNSUPPORTED` without a karnak
-kernel; it no longer refuses unconditionally.
+`Application/XnuLoader` is in the FV.  It opens `\xnu\kernelcache` (falling
+back to a root-level `\kernelcache` for `FvSimpleFileSystem`), parses the
+image, allocates a destination from the UEFI allocator, copies every loadable
+segment, builds `boot_args` (DTB from the shim, video from GOP, DRAM from the
+DTS floor), and calls the same handoff.  `XnuImageLib` accepts both `LC_MAIN`
+and XNU's `LC_UNIXTHREAD` (ARM64 thread state) as the entry point.
+
+## Synthetic kernel end-to-end test
+
+Until a karnak XNU exists, `Test/SyntheticKernel/SyntheticKernel.S` is wrapped
+into a minimal ARM64 Mach-O by `tools/mk_macho.py` and embedded in the FV as a
+named file `kernelcache`.  `tools/build_synthetic_kernel.sh` assembles it
+during `build_uefi.sh`.
+
+With `PcdKarnakSyntheticKernelTest=TRUE`, `KarnakProbeDxe` loads
+`XnuLoader.efi` from the FV at `ReadyToBoot` and starts it.  The loader then
+runs the real code path above on the synthetic image.  **Verified on
+hardware:** white top band (entry reached), cyan band (the loaded image ran)
+and green body (`boot_args` valid, EL1), i.e. file -> parse -> copy ->
+`ExitBootServices` -> handoff works end-to-end.
+
+The synthetic payload's colours are raw framebuffer words; the panel scans
+bytes R,G,B,A, so a little-endian word is `0xAABBGGRR`.
 
 ## Contract with the firmware
 
@@ -68,8 +85,8 @@ KarnakPkg guarantees, before `XnuLoader.efi` runs:
   retail device is 1.5 GiB).
 - A `\xnu\bootargs` file for the kernel command line instead of the built-in
   string.
-- Putting `XnuLoader` in the FV and creating a boot option once a kernel
-  exists.
+- A boot option for `XnuLoader` (the synthetic test launches it from
+  `KarnakProbeDxe`).
 
 ## References
 
