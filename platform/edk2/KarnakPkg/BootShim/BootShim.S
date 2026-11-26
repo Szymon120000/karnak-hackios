@@ -8,7 +8,7 @@
  * We:
  *   1. copy the live DTB to DTB_STORE (bounded by DTB_MAX),
  *   2. publish the copy's address at DTB_PTR_STORE for KarnakDtbLoaderLib,
- *   3. relocate the appended EDK2 FD to UEFI_BASE,
+ *   3. copy the EDK2 FD from the boot image ramdisk to UEFI_BASE,
  *   4. branch to the FD entry point.
  *
  * All constants come from the Makefile, which gets them from
@@ -57,12 +57,14 @@ _Start:
 
 #ifdef FB_MARKER
 	/*
-	 * Optional early display marker.  Disabled by default: at this point
-	 * the MMU tables are still LK's, which on this device do not map the
-	 * 1.4 GiB bank at 0x98800000.  UEFI maps it later from the DTB.
+	 * Optional early display marker.  Disabled by default.  The panel
+	 * framebuffer at 0x98800000 is directly addressable here: a probe
+	 * payload writing it with LK's MMU state on showed up on screen.
+	 * The alpha byte must be 0xFF, or the layer is fully transparent and
+	 * the marker is invisible.
 	 */
 	ldr	x1, =FB_BASE
-	ldr	w2, =0x00FF0000		/* BGRA8888 red */
+	ldr	w2, =0xFF0000FF		/* BGRA8888 opaque red */
 	ldr	x3, =(FB_WIDTH * 128)	/* pixels in the painted band */
 	ldr	x12, =(FB_WIDTH * FB_HEIGHT * 4)	/* layer stride */
 	mov	x6, #FB_LAYERS
@@ -110,8 +112,13 @@ _Start:
 	dsb	sy
 
 2:
-	/* Copy the appended EDK2 FD to its link address. */
-	adr	x5, _Payload
+	/*
+	 * Copy the EDK2 FD from the boot image ramdisk to its link address.
+	 * LK loads the ramdisk at RAMDISK_BASE; the kernel itself is only this
+	 * shim plus the appended DTB, because LK's decompressor fails on large
+	 * compressed kernels.
+	 */
+	ldr	x5, =RAMDISK_BASE
 	ldr	x4, =UEFI_BASE
 	ldr	x6, =UEFI_SIZE
 

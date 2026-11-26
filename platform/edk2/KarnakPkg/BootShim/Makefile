@@ -9,6 +9,9 @@ OBJCOPY       := $(CROSS_COMPILE)objcopy
 # Must match include/karnak/hardware_map.h.
 UEFI_BASE     ?= 0x50000000
 UEFI_SIZE     ?= 0x00700000
+# LK's ramdisk load address; the EDK2 FD is shipped there and copied to
+# UEFI_BASE (see hardware_map.h).
+RAMDISK_BASE  ?= 0x43480000
 DTB_STORE     ?= 0x4FE00000
 DTB_PTR_STORE ?= 0x4FF00000
 DTB_MAX       ?= 0x00100000
@@ -30,6 +33,7 @@ FB_LAYERS     ?= 3
 FB_MARKER     ?= 0
 
 DEFINES := -DUEFI_BASE=$(UEFI_BASE) -DUEFI_SIZE=$(UEFI_SIZE) \
+           -DRAMDISK_BASE=$(RAMDISK_BASE) \
            -DDTB_STORE=$(DTB_STORE) -DDTB_PTR_STORE=$(DTB_PTR_STORE) \
            -DDTB_MAX=$(DTB_MAX) -DWDT_BASE=$(WDT_BASE) \
            -DFB_BASE=$(FB_BASE) -DFB_WIDTH=$(FB_WIDTH) \

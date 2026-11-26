@@ -54,6 +54,9 @@ export BOOT_HEADER_VERSION=0
 export LK_KERNEL_ADDR="$KERNEL_ADDR"
 export LK_TAGS_ADDR="$TAGS_ADDR"
 [[ -n "$PAGE_SIZE" ]] && export LK_PAGE_SIZE="$PAGE_SIZE"
+# The payload must be gzipped with a DTB appended; take the tree from the same
+# stock image the addresses came from.
+[[ -n "$STOCK" && -z "${KARNAK_DTB:-}" ]] && export KARNAK_STOCK_BOOT="$STOCK"
 
 "$ROOT/scripts/build_uefi.sh" "$TARGET"
 

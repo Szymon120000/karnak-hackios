@@ -69,7 +69,20 @@ The first on-device test is the UEFI stage only (`LK -> BootShim -> EDK2`):
 
 - `BOOT_HEADER_VERSION=0` produces `out/uefi-karnak-lk.img` in the legacy
   layout the stock LK expects (2048-byte pages, explicit `kernel_addr` and
-  `tags_addr`, both mandatory).
+  `tags_addr`, both mandatory).  The kernel is a gzip of just the small shim
+  with the stock DTB appended, and the EDK2 FD is the boot image ramdisk:
+  LK's decompressor fails on kernels with large compressed bodies, but a tiny
+  kernel plus a ramdisk boots reliably.  BootShim copies the FD from
+  `KARN_RAMDISK_BASE` (0x43480000, from the stock boot header) to
+  `KARN_UEFI_BASE`.  The DTB is taken from `KARNAK_DTB=<file>` or extracted
+  from `device-backup/boot-stock.img` with `tools/extract_dtb.py`.
+- Verified on hardware: LK executes the payload, BootShim runs, and the real
+  EDK2 firmware takes over.  With `PcdKarnakBringupMarkers=TRUE`,
+  `KarnakProbeDxe` paints its colour bands and then fills the screen magenta.
+  The shim's framebuffer write is BGRA8888 (opaque red is `0xFF0000FF`).
+- `tools/check_boot_image.py` enforces the appended DTB and the ramdisk FD for
+  v0 images; `tools/test_extract_dtb.py` and `tools/test_check_boot_image.py`
+  cover both layouts.
 - `scripts/flash_karnak.sh` validates the image, the `karnak` product string,
   the unlock state and a stock boot-image backup before writing.
 - The retail boot image has an amonet microloader stub in `0x0..0x400` and the
@@ -83,9 +96,9 @@ The first on-device test is the UEFI stage only (`LK -> BootShim -> EDK2`):
   why the shim and `WatchDogDxe` now disable the watchdog.  The same log gave
   the real framebuffer base, replacing the 512 MiB fallback.
 
-Expected on success: a red shim band followed by the UEFI console/shell plus
-`KarnakInfoDxe` DTB/DRAM lines.  There is no XNU kernel and no internal eMMC
-driver yet.
+Expected on success: the shim's blue band followed by the UEFI console/shell
+plus `KarnakInfoDxe` DTB/DRAM lines.  There is no XNU kernel and no internal
+eMMC driver yet.
 
 ## Boot chain checkpoints
 

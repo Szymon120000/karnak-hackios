@@ -40,8 +40,21 @@ def main(argv=None) -> int:
         print(f"error: {args.image} is not an Android boot image", file=sys.stderr)
         return 1
 
+    # amonet (the karnak bootloader unlock) leaves a 0x400-byte microloader
+    # stub at offset 0 and puts the real boot image at 0x400.  Detect it by
+    # the stub's implausible v0 page size rather than assuming a layout.
+    base = 0
     kernel_size, = struct.unpack_from("<I", data, 8)
     header_version, = struct.unpack_from("<I", data, 40)
+    if header_version in LEGACY_VERSIONS:
+        page_size, = struct.unpack_from("<I", data, 36)
+        if (page_size < 2048 or page_size & (page_size - 1)) \
+                and len(data) >= 0x400 + 44 and data[0x400:0x408] == BOOT_MAGIC:
+            base = 0x400
+            kernel_size, = struct.unpack_from("<I", data, base + 8)
+            header_version, = struct.unpack_from("<I", data, base + 40)
+            print("note: amonet microloader stub at 0x0; "
+                  "reading the real header at 0x400")
 
     print(f"image            {args.image}")
     print(f"size             {len(data)} bytes")
@@ -49,15 +62,15 @@ def main(argv=None) -> int:
     print(f"kernel_size      {kernel_size} (0x{kernel_size:x})")
 
     if header_version in LEGACY_VERSIONS:
-        kernel_addr, = struct.unpack_from("<I", data, 12)
-        ramdisk_size, = struct.unpack_from("<I", data, 16)
-        ramdisk_addr, = struct.unpack_from("<I", data, 20)
-        second_size, = struct.unpack_from("<I", data, 24)
-        second_addr, = struct.unpack_from("<I", data, 28)
-        tags_addr, = struct.unpack_from("<I", data, 32)
-        page_size, = struct.unpack_from("<I", data, 36)
-        name = data[48:64].split(b"\x00", 1)[0].decode(errors="replace")
-        cmdline = data[64:64 + 512].split(b"\x00", 1)[0].decode(errors="replace")
+        kernel_addr, = struct.unpack_from("<I", data, base + 12)
+        ramdisk_size, = struct.unpack_from("<I", data, base + 16)
+        ramdisk_addr, = struct.unpack_from("<I", data, base + 20)
+        second_size, = struct.unpack_from("<I", data, base + 24)
+        second_addr, = struct.unpack_from("<I", data, base + 28)
+        tags_addr, = struct.unpack_from("<I", data, base + 32)
+        page_size, = struct.unpack_from("<I", data, base + 36)
+        name = data[base + 48:base + 64].split(b"\x00", 1)[0].decode(errors="replace")
+        cmdline = data[base + 64:base + 64 + 512].split(b"\x00", 1)[0].decode(errors="replace")
 
         print(f"page_size        {page_size}")
         print(f"kernel_addr      0x{kernel_addr:08x}")

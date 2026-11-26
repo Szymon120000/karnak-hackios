@@ -11,6 +11,7 @@ EDK2 checkout or cross toolchain required.
 from __future__ import annotations
 
 import contextlib
+import gzip
 import io
 import struct
 import tempfile
@@ -43,12 +44,27 @@ def build_fd(fd_size: int = FD_SIZE) -> bytes:
     return bytes(fd)
 
 
+def build_dtb(size: int = 0x100) -> bytes:
+    dtb = bytearray(size)
+    dtb[0:4] = cbi.FDT_MAGIC
+    struct.pack_into(">I", dtb, 4, size)            # totalsize (big-endian)
+    return bytes(dtb)
+
+
 def build_payload(fd_size: int = FD_SIZE) -> bytes:
     shim = bytearray(SHIM_SIZE)
     struct.pack_into("<I", shim, 0x00, 0x14000000 | 0x40)   # b _Start
     struct.pack_into("<Q", shim, 0x10, fd_size + 0x1000)    # image_size
     shim[0x38:0x3C] = cbi.ARM64_MAGIC
     return bytes(shim) + build_fd(fd_size)
+
+
+def build_shim(image_size: int = FD_SIZE + 0x1000) -> bytes:
+    shim = bytearray(SHIM_SIZE)
+    struct.pack_into("<I", shim, 0x00, 0x14000000 | 0x40)   # b _Start
+    struct.pack_into("<Q", shim, 0x10, image_size)          # image_size
+    shim[0x38:0x3C] = cbi.ARM64_MAGIC
+    return bytes(shim)
 
 
 def build_modern_image(*, fd_size: int = FD_SIZE) -> bytes:
@@ -66,17 +82,31 @@ def build_legacy_image(
     page_size: int = LEGACY_PAGE,
     kernel_addr: int = 0x40080000,
     tags_addr: int = 0x4FE00000,
+    dtb: bytes | None = None,
+    ramdisk: bytes | None = None,
+    image_size: int | None = None,
 ) -> bytes:
-    payload = build_payload(fd_size)
+    tree = build_dtb() if dtb is None else dtb
+    # LK decompresses only the first gzip member and then looks for the DTB in
+    # the bytes that follow it, so the tree is appended outside the stream.
+    kernel = gzip.compress(build_shim(
+        FD_SIZE + 0x1000 if image_size is None else image_size)) + tree
+    ramdisk = build_fd(fd_size) if ramdisk is None else ramdisk
+
     header = bytearray(page_size)
     header[0:8] = cbi.BOOT_MAGIC
-    struct.pack_into("<I", header, 8, len(payload))   # kernel_size
-    struct.pack_into("<I", header, 12, kernel_addr)   # kernel_addr
-    struct.pack_into("<I", header, 32, tags_addr)     # tags_addr
-    struct.pack_into("<I", header, 36, page_size)     # page_size
-    struct.pack_into("<I", header, 40, 0)             # header_version
-    padded = payload + b"\x00" * ((-len(payload)) % page_size)
-    return bytes(header) + padded
+    struct.pack_into("<I", header, 8, len(kernel))     # kernel_size
+    struct.pack_into("<I", header, 12, kernel_addr)    # kernel_addr
+    struct.pack_into("<I", header, 16, len(ramdisk))   # ramdisk_size
+    struct.pack_into("<I", header, 20, 0x43480000)     # ramdisk_addr
+    struct.pack_into("<I", header, 32, tags_addr)      # tags_addr
+    struct.pack_into("<I", header, 36, page_size)      # page_size
+    struct.pack_into("<I", header, 40, 0)              # header_version
+
+    def pad(blob: bytes) -> bytes:
+        return blob + b"\x00" * ((-len(blob)) % page_size)
+
+    return bytes(header) + pad(kernel) + pad(ramdisk)
 
 
 class CheckBootImageTest(unittest.TestCase):
@@ -148,9 +178,30 @@ class CheckBootImageTest(unittest.TestCase):
         self.assertEqual(self.run_check(build_legacy_image(page_size=2000)), 1)
 
     def test_legacy_payload_mismatch(self):
-        data = bytearray(build_legacy_image())
-        struct.pack_into("<Q", data, LEGACY_PAGE + 0x10, FD_SIZE)  # wrong image_size
-        self.assertEqual(self.run_check(bytes(data)), 1)
+        self.assertEqual(self.run_check(build_legacy_image(image_size=FD_SIZE)), 1)
+
+    def test_legacy_gzipped_with_dtb_passes(self):
+        self.assertEqual(self.run_check(build_legacy_image()), 0)
+
+    def test_legacy_missing_dtb(self):
+        self.assertEqual(self.run_check(build_legacy_image(dtb=b"")), 1)
+
+    def test_legacy_truncated_dtb(self):
+        self.assertEqual(self.run_check(build_legacy_image(dtb=build_dtb()[:6])), 1)
+
+    def test_legacy_missing_ramdisk(self):
+        self.assertEqual(self.run_check(build_legacy_image(ramdisk=b"")), 1)
+
+    def test_legacy_ramdisk_not_an_fd(self):
+        ramdisk = bytearray(build_fd())
+        ramdisk[0x28:0x2C] = b"XXXX"
+        self.assertEqual(self.run_check(build_legacy_image(ramdisk=bytes(ramdisk))), 1)
+
+    def test_legacy_bad_fv_checksum(self):
+        ramdisk = bytearray(build_fd())
+        off = 0x32
+        struct.pack_into("<H", ramdisk, off, struct.unpack_from("<H", ramdisk, off)[0] ^ 0x5A5A)
+        self.assertEqual(self.run_check(build_legacy_image(ramdisk=bytes(ramdisk))), 1)
 
 
 if __name__ == "__main__":

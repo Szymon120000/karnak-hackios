@@ -373,6 +373,9 @@ def header(d: dict) -> str:
 #define KARN_DTB_PTR_STORE_SIZE        {fmt(0x00001000)}
 #define KARN_UEFI_BASE                 {fmt(0x50000000)}
 #define KARN_UEFI_SIZE                 {fmt(0x00700000)}
+/* LK's ramdisk load address, from the retail stock boot header.  The EDK2 FD
+ * is shipped as the boot image ramdisk and copied to KARN_UEFI_BASE. */
+#define KARN_RAMDISK_BASE              {fmt(0x43480000)}
 #define KARN_UEFI_STACK_BASE           {fmt(0x50800000)}
 #define KARN_UEFI_STACK_SIZE           {fmt(0x00040000)}
 #define KARN_UEFI_VECTOR_BASE          {fmt(0x50840000)}

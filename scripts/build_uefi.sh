@@ -11,7 +11,12 @@
 #   LK_KERNEL_ADDR=0x...   physical kernel load address used by the stock LK
 #   LK_TAGS_ADDR=0x...     tags/DTB address used by the stock LK
 #   LK_PAGE_SIZE=2048      page size for v0 (from the stock boot header)
-#                          Addresses are mandatory for v0; never guessed.
+#   KARNAK_DTB=<path>      DTB to append (default: extract from the stock image)
+#   KARNAK_STOCK_BOOT=<path>  stock boot.img used for DTB extraction
+#                          (default: device-backup/boot-stock.img)
+#                          Addresses are mandatory for v0; never guessed.  The
+#                          kernel is gzipped and the DTB appended, which is the
+#                          only payload form karnak's LK will jump to.
 #
 # The build deliberately drives EDK2's `build` tool directly instead of the
 # stuart/edk2-pytool wrapper: KarnakPkg has no Python dependencies, and the
@@ -148,12 +153,14 @@ FD="$OUT/KARNAK_UEFI.fd"
 # BootShim is prepended to the FD by the bootloader chain; keep both the raw
 # shim+FD blob and an Android boot image for `fastboot flash boot`.
 SHIM_DIR="$EDK2_DIR/Platform/Amazon/KarnakPkg/BootShim"
-make -C "$SHIM_DIR" \
+make -B -C "$SHIM_DIR" \
   UEFI_BASE="$FD_BASE" \
   UEFI_SIZE="$FD_SIZE" \
+  RAMDISK_BASE=0x43480000 \
   DTB_STORE=0x4FE00000 \
   DTB_PTR_STORE=0x4FF00000 \
-  DTB_MAX=0x00100000
+  DTB_MAX=0x00100000 \
+  FB_MARKER="${FB_MARKER:-0}"
 
 mkdir -p "$ROOT/out"
 cat "$SHIM_DIR/BootShim.bin" "$FD" > "$ROOT/out/uefi-karnak.fd"
@@ -168,21 +175,59 @@ if [[ "$BOOT_HEADER_VERSION" == "0" ]]; then
   # value from the device's working 64-bit TWRP boot image; the stock boot
   # image used 32N2 for the last cluster.
   LK_CMDLINE="${LK_CMDLINE:-bootopt=64S3,32N2,64N2}"
+
+  # karnak's LK only jumps to a payload that is gzip-compressed and followed
+  # by a device tree blob; without the FDT it logs "Can't find device tree"
+  # and the SoC resets when LK's watchdog expires.  LK's decompressor also
+  # fails on large compressed kernels, so only the small shim is compressed
+  # and the EDK2 FD rides in the boot image ramdisk (LK loads it at
+  # RAMDISK_BASE, and BootShim copies it to UEFI_BASE).
+  DTB="${KARNAK_DTB:-$ROOT/out/karnak.dtb}"
+  if [[ -n "${KARNAK_DTB:-}" ]]; then
+    [[ -f "$DTB" ]] || { echo "error: KARNAK_DTB=$DTB does not exist" >&2; exit 1; }
+  else
+    STOCK_BOOT="${KARNAK_STOCK_BOOT:-$ROOT/device-backup/boot-stock.img}"
+    [[ -f "$STOCK_BOOT" ]] || {
+      echo "error: need KARNAK_DTB=<file.dtb> or the stock boot image at $STOCK_BOOT" >&2
+      exit 1
+    }
+    python3 "$ROOT/tools/extract_dtb.py" "$STOCK_BOOT" "$DTB"
+  fi
+  LK_KERNEL="$ROOT/out/uefi-karnak-lk.kernel"
+  python3 - "$SHIM_DIR/BootShim.bin" "$DTB" "$LK_KERNEL" <<'PY'
+import gzip
+import sys
+
+shim, tree, output = sys.argv[1:4]
+with open(shim, "rb") as f:
+    payload = f.read()
+with open(tree, "rb") as f:
+    dtb = f.read()
+# Compress only the shim: LK decompresses the first gzip member and then
+# looks for the DTB in the bytes that follow it.
+with open(output, "wb") as f:
+    f.write(gzip.compress(payload, 9, mtime=0))
+    f.write(dtb)
+PY
+
   MKBOOT_ARGS=(
     --header_version 0
     --kernel_addr "$LK_KERNEL_ADDR"
     --tags_addr "$LK_TAGS_ADDR"
     --pagesize "${LK_PAGE_SIZE:-2048}"
+    --ramdisk "$FD"
+    --ramdisk_addr 0x43480000
     --cmdline "$LK_CMDLINE"
   )
 else
   BOOT_IMG="$ROOT/out/uefi-karnak.img"
+  LK_KERNEL="$ROOT/out/uefi-karnak.fd"
   MKBOOT_ARGS=(--header_version "$BOOT_HEADER_VERSION")
 fi
 
 python3 "$EDK2_DIR/Platform/Amazon/KarnakPkg/Tools/mkbootimg.py" \
   "${MKBOOT_ARGS[@]}" \
-  --kernel "$ROOT/out/uefi-karnak.fd" \
+  --kernel "$LK_KERNEL" \
   --output "$BOOT_IMG"
 
 # Structural check: boot header, shim payload offset and FV checksum.
