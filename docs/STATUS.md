@@ -48,8 +48,8 @@
   it as `kernelcache` with `KARNAK_KERNELCACHE`/`KARNAK_AUTORUN_XNU` for a
   hardware boot test (which is still pending).
 - **XNU patch series**: `scripts/stage_xnu.sh` fetches the pinned
-  `xnu-8796.141.3` tag, copies the overlay (including
-  `config/MASTER.arm64.karnak`) and applies eight reviewed patches; CI stages a
+  `xnu-8796.141.3` tag (iOS 16.6 / Darwin 22.6), copies the overlay (including
+  `config/MASTER.arm64.karnak`) and applies nine reviewed patches; CI stages a
   real tree and re-runs the staging to prove idempotence.  The macOS job
   produces a linked arm64 `kernel.development.karnak`; hardware boot and the
   storage/rootfs work are still pending.
@@ -59,8 +59,9 @@
   application is in the FV; it opens `\xnu\kernelcache` (or a root-level
   `\kernelcache`), parses it (including `LC_UNIXTHREAD`, which real XNU kernels
   use), copies every loadable segment to allocator-provided memory, builds
-  `boot_args` and enters it.  No kernel built for karnak exists yet; the path
-  is proved end-to-end on hardware with a synthetic Mach-O (see below).
+  `boot_args` and enters it.  On hardware the real 16 MiB
+  `kernel.development.karnak` now parses, is copied and is entered at EL2 ->
+  EL1; the next step is kernel-side console output.
 - **UEFI exception level**: MediaTek PrePi runs at **EL2** (it sets
   `HCR_EL2.TGE`).  `KarnakXnuHandoff` clears `TGE`/`E2H`, programs an EL1 state
   with `SCTLR_EL1.M/C/I = 0` and returns through `ELR_EL2`/`SPSR_EL2`.  This is
@@ -116,6 +117,13 @@ The first on-device test is the UEFI stage only (`LK -> BootShim -> EDK2`):
   cache cleaning, MMU-off entry and direct physical framebuffer writes.  A
   self-test build intentionally stops there (no Shell); power-cycle to
   recover.
+- Verified on hardware (real kernel handoff): a development kernel built by
+  the macOS job parses as `__TEXT`/`__TEXT_EXEC`/`__LINKEDIT` plus the
+  non-loadable `__CTF` metadata segment, is copied to `0x51e02000`, gets valid
+  `boot_args` and is entered with the MMU/caches off.  The loader prints
+  `EL2: exiting boot services and handing off`; no kernel console exists on
+  hardware yet (UART0 is not wired, so `0009` adds a pre-MMU framebuffer
+  marker and the board hook enables XNU's framebuffer text console).
 - Verified on hardware (loader end-to-end): with
   `PcdKarnakSyntheticKernelTest=TRUE` the probe loads `XnuLoader.efi` from the
   FV at `ReadyToBoot`.  The loader opens the named FV file `kernelcache`

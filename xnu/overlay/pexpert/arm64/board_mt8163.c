@@ -42,6 +42,42 @@ karnak_be32(const void *address)
  * ml_io_map() is legal.  Before this point the early console can only be used
  * from code that still runs on the identity mapping.
  */
+/*
+ * Bring up the in-kernel framebuffer text console.  boot_args carries the
+ * physical address LK programmed into the display controller; setting bit 0
+ * tells initialize_screen() to map it instead of treating it as a virtual
+ * address.  From here on kprintf output is visible on the panel, which is the
+ * only console available until the UART pads are wired.
+ */
+static void
+karnak_fb_console_init(boot_args *args)
+{
+	PE_Video video;
+
+	if ((args->Video.v_baseAddr == 0) || (args->Video.v_rowBytes == 0) ||
+	    (args->Video.v_height == 0))
+	{
+		karnak_early_puts("KARNAK: no boot_args framebuffer\n");
+		return;
+	}
+
+	video = args->Video;
+	video.v_baseAddr = (video.v_baseAddr & ~3UL) | 1UL;   /* physical */
+	video.v_offset   = 0;
+	video.v_length   = 0;
+	/* 2x scaling makes the 8x16 font readable in a photo of the panel. */
+	video.v_scale    = kPEScaleFactor2x;
+	PE_state.video   = video;
+
+	(void)PE_initialize_console(&PE_state.video, kPEGraphicsMode);
+	(void)PE_initialize_console(&PE_state.video, kPEAcquireScreen);
+
+	kprintf("KARNAK: fb console %lux%lu, %lu bpp, stride 0x%lx, pa 0x%lx\n",
+	    (unsigned long)video.v_width, (unsigned long)video.v_height,
+	    (unsigned long)video.v_depth, (unsigned long)video.v_rowBytes,
+	    (unsigned long)(video.v_baseAddr & ~3UL));
+}
+
 void
 karnak_board_early_init(boot_args *args)
 {
@@ -55,6 +91,8 @@ karnak_board_early_init(boot_args *args)
 	} else {
 		karnak_early_puts("KARNAK: UART0 map failed; output may be lost\n");
 	}
+
+	karnak_fb_console_init(args);
 
 	karnak_early_mark("dtb", (unsigned long long)(unsigned long)args->deviceTreeP);
 	karnak_early_mark("dtb_len", args->deviceTreeLength);

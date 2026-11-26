@@ -102,7 +102,8 @@ scripts/stage_xnu.sh            # fetch the pinned tag into vendor/xnu and apply
 scripts/stage_xnu.sh --check    # non-destructive validation (CI)
 ```
 
-The script pins `xnu-8796.141.3` (`1b191cb58250d0705d8a51287127505aa4bc0789`),
+The script pins `xnu-8796.141.3` (iOS 16.6 / Darwin 22.6,
+`1b191cb58250d0705d8a51287127505aa4bc0789`),
 copies `xnu/overlay/` over the tree and applies `xnu/patches/*.patch` through
 `tools/apply_xnu_patches.py`.  Both steps are idempotent, and the patcher
 refuses a tree that is at the wrong revision or in a partial state.  CI runs
@@ -118,6 +119,10 @@ and builds with `MACHINE_CONFIG=KARNAK`.  It runs on `macos-15`/Xcode 16;
 generates code against and `0005` carries the other two Xcode 16 compile
 fixes (the retired macos-14 runner had Xcode 15 and needed none of them).  The job builds plain arm64 (no arm64e slice) because the
 Cortex-A53 has no pointer authentication.
+
+`0009` adds two pre-MMU framebuffer markers to `start.s`, and
+`karnak_board_early_init()` brings up XNU's framebuffer text console, so the
+first hardware boot can be observed without a wired UART.
 
 The current patch series compiles and links a plain arm64
 `kernel.development.karnak` (run `45874882827`); the workflow uploads the real

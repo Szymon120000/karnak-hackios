@@ -1,0 +1,49 @@
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -511,6 +511,22 @@
+ 	mov		x20, x0
+ 	mov		x21, #0
+ 
++#if defined(KARNAK)
++	/*
++	 * Bring-up marker: the loader enters here with the MMU and caches off,
++	 * so boot_args->Video.v_baseAddr is directly usable.  A 64-pixel bar in
++	 * the top-left corner proves the branch into XNU executed.
++	 */
++	ldr		x0, [x20, #40]			// boot_args->Video.v_baseAddr
++	cbz		x0, 9f
++	mov		w1, #0xff
++	mov		w2, #64
++8:	str		w1, [x0], #4
++	subs		w2, w2, #1
++	b.ne		8b
++9:
++#endif /* KARNAK */
++
+ 	// Set low reset vector before attempting any loads
+ 	adrp	x0, EXT(LowExceptionVectorBase)@page
+ 	add		x0, x0, EXT(LowExceptionVectorBase)@pageoff
+@@ -788,6 +804,23 @@
+ 	PAC_INIT_KEY_STATE tmp=x0, tmp2=x1
+ #endif /* HAS_APPLE_PAC */
+ 
++#if defined(KARNAK)
++	/*
++	 * Second bring-up marker: reached the end of the MMU bootstrap setup.
++	 * It is drawn a little further along the top row so the two stages are
++	 * distinguishable in a photo.
++	 */
++	ldr		x0, [x20, #40]
++	cbz		x0, 9f
++	add		x0, x0, #0x100
++	mov		w1, #0xff00
++	mov		w2, #64
++8:	str		w1, [x0], #4
++	subs		w2, w2, #1
++	b.ne		8b
++9:
++#endif /* KARNAK */
++
+ 	// Enable caches, MMU, ROP and JOP
+ 	MOV64   x0, SCTLR_EL1_DEFAULT
+ 	MSR_SCTLR_EL1_X0
