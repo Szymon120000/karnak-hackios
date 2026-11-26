@@ -61,8 +61,16 @@ karnak_fb_console_init(boot_args *args)
 		return;
 	}
 
-	video = args->Video;
-	video.v_baseAddr = (video.v_baseAddr & ~3UL) | 1UL;   /* physical */
+	/*
+	 * boot_args carries a Boot_Video, which has a different layout from
+	 * PE_Video; copy the fields instead of assigning the structs.
+	 */
+	video = PE_state.video;
+	video.v_baseAddr = (args->Video.v_baseAddr & ~3UL) | 1UL;   /* physical */
+	video.v_rowBytes = args->Video.v_rowBytes;
+	video.v_width    = args->Video.v_width;
+	video.v_height   = args->Video.v_height;
+	video.v_depth    = args->Video.v_depth;
 	video.v_offset   = 0;
 	video.v_length   = 0;
 	/* 2x scaling makes the 8x16 font readable in a photo of the panel. */
