@@ -106,6 +106,8 @@ jobs:
           grep -q 'KarnakCPU.cpp' vendor/xnu/iokit/conf/files.arm64
           grep -q 'kernelContent' vendor/xnu/iokit/IOKit/IORPC.h
           grep -q 'kernelContent' vendor/xnu/iokit/DriverKit/IORPC.h
+          grep -q 'UIO_STACKBUF' vendor/xnu/bsd/sys/uio_internal.h
+          grep -q 'reserved10b' vendor/xnu/osfmk/arm/pmap/pmap.h
           test -f vendor/xnu/pexpert/pexpert/arm64/KARNAK.h
           test -f vendor/xnu/pexpert/arm64/board_mt8163.c
           test -f vendor/xnu/iokit/Kernel/arm/KarnakCPU.cpp

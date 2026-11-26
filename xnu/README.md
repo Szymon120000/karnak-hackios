@@ -30,7 +30,8 @@ This directory contains:
   GIC-400 (GICv2) interrupt controller, the architected timer as PPI 27, the
   PSCI secondary entry point and the `ml_is_boot_cpu` fallback for DTBs without
   an Apple `state` property; `0004` backports the `IORPC.kernelContent` field
-  that Xcode 16's `iig` generates code against.
+  that Xcode 16's `iig` generates code against; `0005` applies the Xcode 16
+  `UIO_STACKBUF` fix and gives the non-PAC pmap a distinct spare field.
 - `include/pexpert/...` — vendored xnu-8796 arm64 `boot.h` used only by the
   host test that asserts the firmware `boot_args` layout (see the README there).
 - `tests/boot_args_test.c` — verifies `KarnakBootArgsLib` (in XnuLoaderPkg)
@@ -100,8 +101,8 @@ set `build_kernel` when dispatching) fetches `blacktop/darwin-xnu-build` at a
 pinned commit, stages this tree into `dxb/xnu` with `scripts/stage_xnu.sh`,
 and builds with `MACHINE_CONFIG=KARNAK`.  It runs on `macos-15`/Xcode 16;
 `0004` supplies the `IORPC.kernelContent` field that this Xcode's `iig`
-generates code against (the retired macos-14 runner had Xcode 15 and needed no
-such backport).  The job builds plain arm64 (no arm64e slice) because the
+generates code against and `0005` carries the other two Xcode 16 compile
+fixes (the retired macos-14 runner had Xcode 15 and needed none of them).  The job builds plain arm64 (no arm64e slice) because the
 Cortex-A53 has no pointer authentication.
 
 `xnu.yml` also runs the host-side board, early-console, boot_args and Mach-O
