@@ -110,9 +110,22 @@ index 76582da..485bd57 100644
  		panic("unable to retrieve state for cpu");
  	}
 diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
-index c40c6ea..c92576b 100644
+index c40c6ea..050e3be 100644
 --- a/osfmk/arm64/sleh.c
 +++ b/osfmk/arm64/sleh.c
+@@ -252,10 +252,10 @@ extern void arm64_thread_exception_return(void) __dead2;
+ #define WT_REASON_REG_VIOLATION  8
+ #endif
+ 
+-#if defined(HAS_IPI)
++#if defined(HAS_IPI) || defined(KARNAK)
+ void cpu_signal_handler(void);
+ extern unsigned int gFastIPI;
+-#endif /* defined(HAS_IPI) */
++#endif /* defined(HAS_IPI) || defined(KARNAK) */
+ 
+ static arm_saved_state64_t *original_faulting_state = NULL;
+ 
 @@ -1855,6 +1855,50 @@ sleh_irq(arm_saved_state_t *state)
  #endif
  

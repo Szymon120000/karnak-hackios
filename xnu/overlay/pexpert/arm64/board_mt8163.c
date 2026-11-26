@@ -60,7 +60,7 @@ karnak_board_early_init(boot_args *args)
 	karnak_early_mark("dtb_len", args->deviceTreeLength);
 	karnak_early_mark("mem_size", args->memSize);
 	karnak_early_mark("mem_size_actual", args->memSizeActual);
-	karnak_early_mark("kernel_data_top", args->TopOfKernelData);
+	karnak_early_mark("kernel_data_top", args->topOfKernelData);
 
 	if (args->deviceTreeP != NULL) {
 		unsigned int magic = karnak_be32(args->deviceTreeP);

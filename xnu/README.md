@@ -29,7 +29,8 @@ This directory contains:
   `files.arm64` and calls it from `pe_init.c`/`pe_serial.c`; `0003` adds the
   GIC-400 (GICv2) interrupt controller, the architected timer as PPI 27, the
   PSCI secondary entry point and the `ml_is_boot_cpu` fallback for DTBs without
-  an Apple `state` property; `0004` backports the `IORPC.kernelContent` field
+  an Apple `state` property (and it exposes `cpu_signal_handler` to the KARNAK
+  IRQ path); `0004` backports the `IORPC.kernelContent` field
   that Xcode 16's `iig` generates code against; `0005` applies the Xcode 16
   `UIO_STACKBUF` fix and gives the non-PAC pmap a distinct spare field.
 - `include/pexpert/...` — vendored xnu-8796 arm64 `boot.h` used only by the
