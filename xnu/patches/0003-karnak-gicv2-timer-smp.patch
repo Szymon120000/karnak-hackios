@@ -1,0 +1,449 @@
+diff --git a/iokit/KernelConfigTables.cpp b/iokit/KernelConfigTables.cpp
+index 2b14eda..7247ab9 100644
+--- a/iokit/KernelConfigTables.cpp
++++ b/iokit/KernelConfigTables.cpp
+@@ -34,6 +34,20 @@
+ 
+ const char * gIOKernelConfigTables =
+     "("
++#if defined(ARM64_BOARD_CONFIG_KARNAK)
++    "   {"
++    "     'IOClass'         = KarnakPlatformExpert;"
++    "     'IOProviderClass' = IOPlatformExpertDevice;"
++    "     'IONameMatch'     = 'mediatek,mt8163';"
++    "     'IOProbeScore'    = 10000:32;"
++    "   },"
++    "   {"
++    "     'IOClass'         = KarnakCPU;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IONameMatch'     = 'arm,cortex-a53';"
++    "     'IOProbeScore'    = 10000:32;"
++    "   },"
++#endif
+     "   {"
+     "     'IOClass'         = IOPanicPlatform;"
+     "     'IOProviderClass' = IOPlatformExpertDevice;"
+diff --git a/iokit/conf/files.arm64 b/iokit/conf/files.arm64
+index f731d43..6b0c88b 100644
+--- a/iokit/conf/files.arm64
++++ b/iokit/conf/files.arm64
+@@ -5,3 +5,7 @@ iokit/Kernel/IOPMrootDomain.cpp    					optional iokitcpp
+ 
+ # SMP
+ iokit/Kernel/arm/AppleARMSMP.cpp    					optional iokitcpp
++
++# karnak device-tree platform and PSCI CPU driver (empty on other boards)
++iokit/Kernel/arm/KarnakPlatformExpert.cpp                               optional iokitcpp
++iokit/Kernel/arm/KarnakCPU.cpp                                          optional iokitcpp
+diff --git a/osfmk/arm64/cpu.c b/osfmk/arm64/cpu.c
+index 94e9130..377cfa1 100644
+--- a/osfmk/arm64/cpu.c
++++ b/osfmk/arm64/cpu.c
+@@ -922,6 +922,22 @@ cpu_start(int cpu)
+ 
+ 		flush_dcache((vm_offset_t)&CpuDataEntries[cpu], sizeof(cpu_data_entry_t), FALSE);
+ 		flush_dcache((vm_offset_t)cpu_data_ptr, sizeof(cpu_data_t), FALSE);
++#if defined(KARNAK)
++		/*
++		 * karnak's PSCI reset stub (start.s) loads these through physical
++		 * addresses with caches off, so clean the VA ranges to the point of
++		 * coherency before releasing the secondary CPU.
++		 */
++		extern uint8_t bootstrap_pagetables[BOOTSTRAP_TABLE_SIZE];
++		CleanPoC_DcacheRegion_Force((vm_offset_t)CpuDataEntries, sizeof(CpuDataEntries));
++		CleanPoC_DcacheRegion_Force((vm_offset_t)cpu_data_ptr, sizeof(cpu_data_t));
++		CleanPoC_DcacheRegion_Force((vm_offset_t)&ResetHandlerData, sizeof(ResetHandlerData));
++		CleanPoC_DcacheRegion_Force((vm_offset_t)BootArgs, sizeof(*BootArgs));
++		CleanPoC_DcacheRegion_Force((vm_offset_t)&sysreg_restore, sizeof(sysreg_restore));
++		CleanPoC_DcacheRegion_Force((vm_offset_t)&cpu_ttep, sizeof(cpu_ttep));
++		CleanPoC_DcacheRegion_Force((vm_offset_t)bootstrap_pagetables, BOOTSTRAP_TABLE_SIZE);
++		__builtin_arm_dsb(DSB_SY);
++#endif /* KARNAK */
+ #if defined(KERNEL_INTEGRITY_CTRR)
+ 
+ 		/* First CPU being started within a cluster goes ahead to lock CTRR for cluster;
+@@ -950,6 +966,20 @@ cpu_start(int cpu)
+ }
+ 
+ 
++#if defined(KARNAK)
++/* Bring-up observer: the self-SGI clears SIGPdisabled after IRQs unmask. */
++boolean_t karnak_cpu_signal_is_enabled(unsigned int cpu);
++boolean_t
++karnak_cpu_signal_is_enabled(unsigned int cpu)
++{
++	if (cpu >= MAX_CPUS) {
++		return FALSE;
++	}
++	cpu_data_t *cdp = CpuDataEntries[cpu].cpu_data_vaddr;
++	return cdp != NULL && !(os_atomic_load(&cdp->cpu_signal, acquire) & SIGPdisabled);
++}
++#endif /* KARNAK */
++
+ void
+ cpu_timebase_init(boolean_t from_boot)
+ {
+diff --git a/osfmk/arm64/machine_routines.c b/osfmk/arm64/machine_routines.c
+index 76582da..485bd57 100644
+--- a/osfmk/arm64/machine_routines.c
++++ b/osfmk/arm64/machine_routines.c
+@@ -914,6 +914,21 @@ ml_is_boot_cpu(const DTEntry entry)
+ 	void const *prop;
+ 	unsigned int propSize;
+ 
++#if defined(KARNAK)
++	/*
++	 * The stock MT8163 device tree has no Apple "state" property.  The CPU
++	 * whose "reg" affinity matches the running MPIDR is the boot CPU.
++	 */
++	if (SecureDTGetProperty(entry, "state", &prop, &propSize) != kSuccess) {
++		uint64_t mpidr;
++		uint32_t reg;
++
++		MRS(mpidr, "MPIDR_EL1");
++		reg = (uint32_t)ml_readprop(entry, "reg", ML_READPROP_MANDATORY);
++		return reg == (uint32_t)(mpidr & 0xffULL);
++	}
++#endif /* KARNAK */
++
+ 	if (SecureDTGetProperty(entry, "state", &prop, &propSize) != kSuccess) {
+ 		panic("unable to retrieve state for cpu");
+ 	}
+diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
+index c40c6ea..c92576b 100644
+--- a/osfmk/arm64/sleh.c
++++ b/osfmk/arm64/sleh.c
+@@ -1855,6 +1855,50 @@ sleh_irq(arm_saved_state_t *state)
+ #endif
+ 
+ 
++#if defined(KARNAK)
++	/*
++	 * karnak: the GIC-400 has no system-register interface (GICv2), and the
++	 * timer PPI 27 plus SGI 1 are Group 1 non-secure interrupts, so they
++	 * arrive here as IRQs.  Acknowledge through GICC_IAR and end with
++	 * GICC_EOIR (combined EOI, EOImode = 0).
++	 */
++	uint32_t iar = karnak_gicv2_ack();
++	uint32_t intid = iar & KARNAK_GICC_IAR_INTID_MASK;
++	boolean_t eoi_pending = TRUE;
++
++	if (intid >= 1020) {
++		/* 1020..1022 are special; 1023 is the spurious interrupt. */
++		return;
++	}
++
++	if (intid == KARNAK_TIMER_INTID) {
++		sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_TIMER);
++		cdp->cpu_decrementer = -1; /* Large */
++		INTERRUPT_MASKED_DEBUG_START(rtclock_intr, DBG_INTR_TYPE_TIMER);
++		rtclock_intr(TRUE);
++		INTERRUPT_MASKED_DEBUG_END();
++	} else if (intid < 16) {
++		sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_IPI);
++		/* Ack before handling so an IPI raised meanwhile is not lost. */
++		karnak_gicv2_eoi(iar);
++		eoi_pending = FALSE;
++		__builtin_arm_isb(ISB_SY);
++		cpu_signal_handler();
++	} else {
++		sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_OTHER);
++		if (cdp->interrupt_handler) {
++			cdp->interrupt_handler(cdp->interrupt_target,
++			    cdp->interrupt_refCon,
++			    cdp->interrupt_nub,
++			    intid);
++		}
++	}
++
++	if (eoi_pending) {
++		karnak_gicv2_eoi(iar);
++		__builtin_arm_isb(ISB_SY);
++	}
++#else
+ 	sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_OTHER);
+ 
+ #if USE_APPLEARMSMP
+@@ -1866,6 +1910,7 @@ sleh_irq(arm_saved_state_t *state)
+ 	    cdp->interrupt_nub,
+ 	    cdp->interrupt_source);
+ #endif
++#endif /* KARNAK */
+ 
+ 	entropy_collect();
+ 
+diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+index e5336e5..f422c3c 100644
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -279,6 +279,54 @@ LEXT(LowExceptionVectorBase)
+ LEXT(bootstrap_instructions)
+ 
+ #endif /* defined(KERNEL_INTEGRITY_KTRR) || defined(KERNEL_INTEGRITY_CTRR) */
++#if defined(KARNAK)
++/*
++ * PSCI CPU_ON entry for karnak (physical address, x0 = context id, no stack,
++ * MMU and caches off).  Firmware may return at EL1 or EL2; check before
++ * touching EL1 state.  The EL2 path assumes no resident hypervisor and
++ * CNTVOFF_EL2 = 0 on boot.  GIC-400 has no system-register interface, so
++ * there is no ICC_SRE_EL2 access here.
++ */
++	.align 2
++	.globl EXT(karnak_secondary_entry)
++LEXT(karnak_secondary_entry)
++	msr		DAIFSet, #0xf
++	mrs		x1, CurrentEL
++	cmp		x1, #0x4
++	b.eq	Lkarnak_secondary_el1
++	cmp		x1, #0x8
++	b.ne	Lkarnak_secondary_bad_el
++
++	adrp	x1, EXT(LowExceptionVectorBase)@page
++	add		x1, x1, EXT(LowExceptionVectorBase)@pageoff
++	msr		VBAR_EL2, x1
++	/* No stage 2, AArch64 EL1, no EL2 interrupt or FP/debug traps. */
++	mov		x1, #(1 << 31)
++	msr		HCR_EL2, x1
++	msr		VTTBR_EL2, xzr
++	msr		CPTR_EL2, xzr
++	msr		MDCR_EL2, xzr
++	mov		x1, #3
++	msr		CNTHCTL_EL2, x1
++	msr		CNTVOFF_EL2, xzr
++	/* Known Armv8 RES1 bits, M/C/I off, little endian. */
++	MOV64	x1, 0x30d00800
++	msr		SCTLR_EL1, x1
++	isb
++	adrp	x1, Lkarnak_secondary_el1@page
++	add		x1, x1, Lkarnak_secondary_el1@pageoff
++	msr		ELR_EL2, x1
++	mov		x1, #0x3c5			// DAIF masked, AArch64 EL1h
++	msr		SPSR_EL2, x1
++	eret
++Lkarnak_secondary_bad_el:
++	b		.
++Lkarnak_secondary_el1:
++	/* x0 is deliberately unused; reset_vector selects CPU data by MPIDR. */
++	msr		SPSel, #1
++	b		EXT(LowResetVectorBase)
++#endif /* KARNAK */
++
+ 	.align 2
+ 	.globl EXT(resume_idle_cpu)
+ LEXT(resume_idle_cpu)
+@@ -745,11 +793,11 @@ common_start:
+ 	MSR_SCTLR_EL1_X0
+ 	isb		sy
+ 
+-#if !VMAPPLE
++#if !VMAPPLE && !defined(KARNAK)
+ 	MOV64   x1, SCTLR_EL1_DEFAULT
+ 	cmp		x0, x1
+ 	bne		.
+-#endif /* !VMAPPLE */
++#endif /* !VMAPPLE && !KARNAK */
+ 
+ #if (!CONFIG_KERNEL_INTEGRITY || (CONFIG_KERNEL_INTEGRITY && !defined(KERNEL_INTEGRITY_WT)))
+ 	/* Watchtower
+diff --git a/pexpert/arm/pe_fiq.c b/pexpert/arm/pe_fiq.c
+index 3ad743f..ef29390 100644
+--- a/pexpert/arm/pe_fiq.c
++++ b/pexpert/arm/pe_fiq.c
+@@ -9,10 +9,135 @@
+ #include <machine/atomic.h>
+ #include <machine/machine_routines.h>
+ #include <pexpert/device_tree.h>
++#include <pexpert/pexpert.h>
+ #include <pexpert/arm64/board_config.h>
+ 
+ 
+-#if HAS_GIC_V3
++#if defined(KARNAK)
++/*
++ * karnak: non-secure GIC-400 (GICv2).  There is no system-register CPU
++ * interface, so every access is MMIO.  Firmware may leave secure-owned
++ * interrupts configured; mask all SPIs and route the PPIs/SGI we own to
++ * Group 1, which is what a non-secure kernel can receive.
++ */
++static vm_offset_t karnak_gicd_base;
++static vm_offset_t karnak_gicc_base;
++
++static inline uint32_t
++karnak_gic_read(vm_offset_t base, uint32_t offset)
++{
++	return *(volatile uint32_t *)(base + offset);
++}
++
++static inline void
++karnak_gic_write(vm_offset_t base, uint32_t offset, uint32_t value)
++{
++	*(volatile uint32_t *)(base + offset) = value;
++}
++
++uint32_t
++karnak_gicv2_ack(void)
++{
++	return karnak_gic_read(karnak_gicc_base, KARNAK_GICC_IAR);
++}
++
++void
++karnak_gicv2_eoi(uint32_t iar)
++{
++	karnak_gic_write(karnak_gicc_base, KARNAK_GICC_EOIR, iar);
++	__builtin_arm_dsb(DSB_SY);
++}
++
++void
++karnak_gicv2_send_sgi(unsigned int aff0)
++{
++	uint32_t value;
++
++	if (aff0 >= 8) {
++		panic("KARNAK GIC: SGI target %u is outside the GICv2 target list", aff0);
++	}
++	value = ((uint32_t)KARNAK_IPI_SGI << KARNAK_GICD_SGIR_SGI_SHIFT) |
++	    ((1U << aff0) << KARNAK_GICD_SGIR_TARGET_SHIFT) |
++	    (KARNAK_GICD_SGIR_FILTER_LIST << KARNAK_GICD_SGIR_FILTER_SHIFT);
++	__builtin_arm_dsb(DSB_ISHST);
++	karnak_gic_write(karnak_gicd_base, KARNAK_GICD_SGIR, value);
++	__builtin_arm_dsb(DSB_SY);
++}
++
++static void
++karnak_gicv2_map(void)
++{
++	uint32_t lines;
++
++	if (karnak_gicd_base != 0) {
++		return;
++	}
++
++	karnak_gicd_base = ml_io_map((vm_offset_t)KARNAK_GICD_PA, 0x1000);
++	karnak_gicc_base = ml_io_map((vm_offset_t)KARNAK_GICC_PA, 0x2000);
++	if (karnak_gicd_base == 0 || karnak_gicc_base == 0) {
++		panic("KARNAK GIC: cannot map GIC-400 distributor/CPU interface");
++	}
++
++	/* Mask and clear every SPI bank; no peripheral driver owns one yet. */
++	lines = karnak_gic_read(karnak_gicd_base, KARNAK_GICD_TYPER) &
++	    KARNAK_GICD_TYPER_LINES;
++	for (uint32_t bank = 1; bank <= lines; bank++) {
++		karnak_gic_write(karnak_gicd_base, KARNAK_GICD_ICENABLER + bank * 4, 0xFFFFFFFFU);
++		karnak_gic_write(karnak_gicd_base, KARNAK_GICD_ICPENDR + bank * 4, 0xFFFFFFFFU);
++		karnak_gic_write(karnak_gicd_base, KARNAK_GICD_IGROUPR + bank * 4, 0xFFFFFFFFU);
++	}
++
++	karnak_gic_write(karnak_gicd_base, KARNAK_GICD_CTLR,
++	    karnak_gic_read(karnak_gicd_base, KARNAK_GICD_CTLR) |
++	    KARNAK_GICD_CTLR_ENABLEGRP1);
++	__builtin_arm_dsb(DSB_SY);
++	__builtin_arm_isb(ISB_SY);
++
++	kprintf("KARNAK GIC: GICv2 IRQ ready, timer=%u, SGI=%u, CNTFRQ=%llu Hz\n",
++	    KARNAK_TIMER_INTID, KARNAK_IPI_SGI,
++	    __builtin_arm_rsr64("CNTFRQ_EL0"));
++}
++
++static void
++karnak_gicv2_init_cpu(void)
++{
++	const uint32_t sources = (1U << KARNAK_TIMER_INTID) | (1U << KARNAK_IPI_SGI);
++	uint32_t ctlr;
++
++	karnak_gicv2_map();
++
++	/* PPI and SGI registers are banked per CPU in the distributor. */
++	karnak_gic_write(karnak_gicd_base, KARNAK_GICD_ICENABLER, 0xFFFFFFFFU);
++	karnak_gic_write(karnak_gicd_base, KARNAK_GICD_ICPENDR, 0xFFFFFFFFU);
++	karnak_gic_write(karnak_gicd_base, KARNAK_GICD_IGROUPR,
++	    karnak_gic_read(karnak_gicd_base, KARNAK_GICD_IGROUPR) | sources);
++
++	*(volatile uint8_t *)(karnak_gicd_base + KARNAK_GICD_IPRIORITYR +
++	    KARNAK_IPI_SGI) = 0x80;
++	*(volatile uint8_t *)(karnak_gicd_base + KARNAK_GICD_IPRIORITYR +
++	    KARNAK_TIMER_INTID) = 0xA0;
++
++	karnak_gic_write(karnak_gicd_base, KARNAK_GICD_ISENABLER, sources);
++
++	/* Combined EOI (EOImode = 0), no FIQ bypass, Group 1 enabled. */
++	ctlr = karnak_gic_read(karnak_gicc_base, KARNAK_GICC_CTLR);
++	ctlr &= ~(KARNAK_GICC_CTLR_EOIMODE | KARNAK_GICC_CTLR_FIQEN);
++	ctlr |= KARNAK_GICC_CTLR_ENABLEGRP1;
++	karnak_gic_write(karnak_gicc_base, KARNAK_GICC_CTLR, ctlr);
++	karnak_gic_write(karnak_gicc_base, KARNAK_GICC_PMR, 0xFF);
++	karnak_gic_write(karnak_gicc_base, KARNAK_GICC_BPR, 0);
++
++	__builtin_arm_dsb(DSB_SY);
++	__builtin_arm_isb(ISB_SY);
++}
++
++void
++pe_init_fiq(void)
++{
++	karnak_gicv2_init_cpu();
++}
++#elif HAS_GIC_V3
+ #define GICR_WAKE_TIMEOUT_NS (1000000000ULL) // timeout for redistributor wakeup (default 1s)
+ MACHINE_TIMEOUT(gicr_wake_timeout_ns, "gicr-wake-timeout", GICR_WAKE_TIMEOUT_NS, MACHINE_TIMEOUT_UNIT_NSEC, NULL);
+ 
+diff --git a/pexpert/arm/pe_identify_machine.c b/pexpert/arm/pe_identify_machine.c
+index aa75c0a..68313a0 100644
+--- a/pexpert/arm/pe_identify_machine.c
++++ b/pexpert/arm/pe_identify_machine.c
+@@ -57,6 +57,27 @@ pe_identify_machine(boot_args * bootArgs)
+ 
+ 	(void)bootArgs;
+ 
++#if defined(KARNAK)
++	/*
++	 * The architected counter is independent of the CPU and bus DVFS
++	 * clocks.  There is no MediaTek clock driver yet, so leave the CPU/bus
++	 * rates unknown rather than publishing a fictitious frequency.  ARM
++	 * timebase callbacks consume timebase_frequency_hz directly.
++	 */
++	uint64_t counter_hz = __builtin_arm_rsr64("CNTFRQ_EL0");
++	if (counter_hz == 0 || counter_hz > UINT32_MAX) {
++		panic("KARNAK clock: invalid architected counter frequency");
++	}
++	assert(counter_hz == KARNAK_COUNTER_HZ);
++	bzero((void *)&gPEClockFrequencyInfo, sizeof(clock_frequency_info_t));
++	gPEClockFrequencyInfo.timebase_frequency_hz = (uint32_t)counter_hz;
++	gPEClockFrequencyInfo.dec_clock_rate_hz = (uint32_t)counter_hz;
++	gPEClockFrequencyInfo.bus_clock_rate_den = 1;
++	gPEClockFrequencyInfo.bus_to_cpu_rate_den = 1;
++	gPEClockFrequencyInfo.bus_to_dec_rate_den = 1;
++	return;
++#endif /* KARNAK */
++
+ 	if (pe_arm_get_soc_base_phys() == 0) {
+ 		return;
+ 	}
+@@ -525,6 +546,16 @@ pe_arm_map_interrupt_controller(void)
+ 	uint32_t        prop_size;
+ 	vm_offset_t     soc_phys = 0;
+ 
++#if defined(KARNAK)
++	/*
++	 * The stock MT8163 device tree is not Apple-shaped (no /arm-io), and
++	 * karnak's GIC-400 is driven from the verified physical addresses in
++	 * KARNAK.h.  There is nothing to look up here.
++	 */
++	gSocPhys = 0;
++	return 1;
++#endif /* KARNAK */
++
+ 	gSocPhys = pe_arm_get_soc_base_phys();
+ 
+ 	soc_phys = gSocPhys;
+diff --git a/pexpert/pexpert/arm64/Makefile b/pexpert/pexpert/arm64/Makefile
+index 8226b8c..5246010 100644
+--- a/pexpert/pexpert/arm64/Makefile
++++ b/pexpert/pexpert/arm64/Makefile
+@@ -16,6 +16,7 @@ PRIVATE_KERNELFILES = \
+ 	board_config.h \
+ 	boot.h \
+ 	H13.h \
++	KARNAK.h \
+ 	VMAPPLE.h \
+ 	BCM2837.h
+ 

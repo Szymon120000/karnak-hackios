@@ -37,9 +37,12 @@
 
 /* Cortex-A53 is ARMv8.0-A: optional CRC/crypto, no LSE, no PAN. */
 
-/* Cortex-A53 is ARMv8.0: no PAN, no LSE, usable with 4 KiB pages. */
+/*
+ * Cortex-A53 is ARMv8.0: no PAN, no LSE.  karnak uses 4 KiB pages, so
+ * __ARM_16K_PG__ must stay undefined: a few XNU headers test it with
+ * #ifdef, not #if.
+ */
 #undef  __ARM_PAN_AVAILABLE__
-#define __ARM_16K_PG__            0
 
 /* ------------------------------------------------------------------ GIC */
 /* MT8163 uses a GIC-400 (GICv2).  DTS: interrupt-controller@10221000. */
@@ -54,17 +57,36 @@
 
 /* GICv2 distributor registers (ARM IHI 0048B). */
 #define KARNAK_GICD_CTLR           0x000
-#define KARNAK_GICD_CTLR_ENABLEGRP1 0x2
+#define KARNAK_GICD_TYPER          0x004
 #define KARNAK_GICD_IGROUPR        0x080
 #define KARNAK_GICD_ISENABLER      0x100
+#define KARNAK_GICD_ICENABLER      0x180
+#define KARNAK_GICD_ICPENDR        0x280
 #define KARNAK_GICD_IPRIORITYR     0x400
 #define KARNAK_GICD_ITARGETSR      0x800
+#define KARNAK_GICD_SGIR           0xF00
+
+/*
+ * karnak's UEFI runs non-secure.  In the non-secure view of GICv2 the
+ * group-1 enable is bit 0 (the secure view calls it EnableGrp0).
+ */
+#define KARNAK_GICD_CTLR_ENABLEGRP1 0x1
+#define KARNAK_GICD_TYPER_LINES    0x1F  /* ITLinesNumber */
+
+#define KARNAK_GICD_SGIR_SGI_SHIFT    0
+#define KARNAK_GICD_SGIR_TARGET_SHIFT 16
+#define KARNAK_GICD_SGIR_FILTER_SHIFT 24
+#define KARNAK_GICD_SGIR_FILTER_LIST  0x0
+
 #define KARNAK_GICC_CTLR           0x000
-#define KARNAK_GICC_CTLR_ENABLEGRP1 0x2
+#define KARNAK_GICC_CTLR_ENABLEGRP1 0x1
+#define KARNAK_GICC_CTLR_EOIMODE    (1U << 9)
+#define KARNAK_GICC_CTLR_FIQEN      (1U << 3)
 #define KARNAK_GICC_PMR            0x004
 #define KARNAK_GICC_BPR            0x008
 #define KARNAK_GICC_IAR            0x00C
 #define KARNAK_GICC_EOIR           0x010
+#define KARNAK_GICC_IAR_INTID_MASK 0x3FFU
 
 /* ----------------------------------------------------------------- timer */
 /* DTS timer:clock-frequency = 13000000.  PPIs 13/14/11/10 -> 29/30/27/26. */

@@ -94,7 +94,7 @@ index 997a4ab..f33a57c 100644
  #ifdef VMAPPLE_UART
  
  static vm_offset_t vmapple_uart0_base_vaddr = 0;
-@@ -769,6 +823,17 @@ serial_init(void)
+@@ -769,6 +823,25 @@ serial_init(void)
  		return 1;
  	}
  
@@ -105,6 +105,14 @@ index 997a4ab..f33a57c 100644
 +		if (karnak_uart != 0) {
 +			karnak_early_set_mmio_base((unsigned long)karnak_uart);
 +			register_serial_functions(&karnak_uart_serial_functions);
++			/*
++			 * The stock MT8163 device tree has no "arm-io" node, so the
++			 * common DT path below would return 0.  Finish here instead.
++			 */
++			serial_do_transmit = 1;
++			karnak_uart_serial_functions.init();
++			uart_initted = true;
++			return 1;
 +		}
 +	}
 +#endif /* KARNAK_UART */
@@ -126,7 +134,20 @@ diff --git a/pexpert/pexpert/arm/protos.h b/pexpert/pexpert/arm/protos.h
 index 404b50b..2fd05e6 100644
 --- a/pexpert/pexpert/arm/protos.h
 +++ b/pexpert/pexpert/arm/protos.h
-@@ -47,7 +47,8 @@ typedef enum serial_device {
+@@ -35,6 +35,12 @@
+ #endif /* PRIVATE */
+ int uart_getc(void);
+ 
+ void pe_init_fiq(void);
+ 
++#if defined(ARM64_BOARD_CONFIG_KARNAK)
++void karnak_gicv2_send_sgi(unsigned int aff0);
++uint32_t karnak_gicv2_ack(void);
++void karnak_gicv2_eoi(uint32_t iar);
++#endif /* ARM64_BOARD_CONFIG_KARNAK */
++
+ #ifdef PRIVATE
+@@ -47,7 +53,8 @@ typedef enum serial_device {
  	SERIAL_DOCKCHANNEL=0x2,
  	SERIAL_PI3_UART=0x4,
  	SERIAL_VMAPPLE_UART=0x8,

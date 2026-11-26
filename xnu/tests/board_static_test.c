@@ -38,6 +38,22 @@ main(void)
 	assert(KARNAK_GICV_PA == 0x10224000U);
 	assert(KARNAK_GICH_PA == 0x10226000U);
 
+	/* GICv2 non-secure view: Group 1 is bit 0 on both interfaces. */
+	assert(KARNAK_GICD_CTLR_ENABLEGRP1 == 0x1);
+	assert(KARNAK_GICC_CTLR_ENABLEGRP1 == 0x1);
+	assert(KARNAK_GICC_CTLR_EOIMODE == (1U << 9));
+	assert(KARNAK_GICC_CTLR_FIQEN == (1U << 3));
+	assert((KARNAK_GICC_IAR_INTID_MASK & KARNAK_TIMER_INTID) ==
+	    KARNAK_TIMER_INTID);
+	assert(KARNAK_TIMER_INTID < 32 && KARNAK_IPI_SGI < 16);
+	assert(KARNAK_GICD_ICENABLER == 0x180);
+	assert(KARNAK_GICD_ICPENDR == 0x280);
+	assert(KARNAK_GICD_SGIR == 0xF00);
+	assert(KARNAK_GICD_SGIR_SGI_SHIFT == 0);
+	assert(KARNAK_GICD_SGIR_TARGET_SHIFT + 8 <=
+	    KARNAK_GICD_SGIR_FILTER_SHIFT);
+	assert(KARNAK_SMP_MAX_CPUS <= 8); /* GICv2 has an 8-bit target list */
+
 	printf("karnak board header: ok\n");
 	return 0;
 }

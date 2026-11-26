@@ -85,8 +85,16 @@ jobs:
           grep -q 'ARM64_BOARD_CONFIG_KARNAK' vendor/xnu/pexpert/pexpert/arm64/board_config.h
           grep -q 'KARNAK_UART' vendor/xnu/pexpert/arm/pe_serial.c
           grep -q 'karnak_early.c' vendor/xnu/pexpert/conf/files.arm64
+          grep -q 'karnak_gicv2_init_cpu' vendor/xnu/pexpert/arm/pe_fiq.c
+          grep -q 'karnak_gicv2_ack' vendor/xnu/osfmk/arm64/sleh.c
+          grep -q 'karnak_secondary_entry' vendor/xnu/osfmk/arm64/start.s
+          grep -q 'karnak_cpu_signal_is_enabled' vendor/xnu/osfmk/arm64/cpu.c
+          grep -q 'ml_is_boot_cpu' vendor/xnu/osfmk/arm64/machine_routines.c
+          grep -q 'KarnakCPU.cpp' vendor/xnu/iokit/conf/files.arm64
           test -f vendor/xnu/pexpert/pexpert/arm64/KARNAK.h
           test -f vendor/xnu/pexpert/arm64/board_mt8163.c
+          test -f vendor/xnu/iokit/Kernel/arm/KarnakCPU.cpp
+          test -f vendor/xnu/iokit/Kernel/arm/KarnakPlatformExpert.cpp
 
       - name: Re-run the stage (must be idempotent)
         run: ./scripts/stage_xnu.sh
