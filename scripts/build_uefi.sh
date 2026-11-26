@@ -14,6 +14,12 @@
 #   KARNAK_DTB=<path>      DTB to append (default: extract from the stock image)
 #   KARNAK_STOCK_BOOT=<path>  stock boot.img used for DTB extraction
 #                          (default: device-backup/boot-stock.img)
+#   KARNAK_KERNELCACHE=<path>  embed this Mach-O kernel as the FV file
+#                          "kernelcache" instead of the synthetic test image
+#                          (the FV is LZMA-compressed as a whole, so the kernel
+#                          does not have to fit in FD_SIZE uncompressed).
+#   KARNAK_AUTORUN_XNU=1   have KarnakProbeDxe start XnuLoader.efi at
+#                          ReadyToBoot instead of dropping to the UEFI shell.
 #                          Addresses are mandatory for v0; never guessed.  The
 #                          kernel is gzipped and the DTB appended, which is the
 #                          only payload form karnak's LK will jump to.
@@ -28,6 +34,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # user-supplied input paths absolute now.
 [[ -n "${KARNAK_DTB:-}" ]] && KARNAK_DTB="$(realpath "$KARNAK_DTB")"
 [[ -n "${KARNAK_STOCK_BOOT:-}" ]] && KARNAK_STOCK_BOOT="$(realpath "$KARNAK_STOCK_BOOT")"
+[[ -n "${KARNAK_KERNELCACHE:-}" ]] && KARNAK_KERNELCACHE="$(realpath "$KARNAK_KERNELCACHE")"
 EDK2_DIR="$ROOT/vendor/edk2-mtk"
 TARGET="${1:-${TARGET:-DEBUG}}"
 # GCC5 is the toolchain MediaTek's tree is validated against and produces ELF
@@ -53,6 +60,27 @@ fi
 SYNTH_DIR="$EDK2_DIR/Platform/Amazon/KarnakPkg/Test/SyntheticKernel"
 CROSS_COMPILE="${CROSS_COMPILE:-aarch64-linux-gnu-}" \
   "$ROOT/tools/build_synthetic_kernel.sh" "$SYNTH_DIR"
+
+if [[ -n "${KARNAK_KERNELCACHE:-}" ]]; then
+  [[ -f "$KARNAK_KERNELCACHE" ]] || {
+    echo "error: KARNAK_KERNELCACHE=$KARNAK_KERNELCACHE does not exist" >&2
+    exit 1
+  }
+  echo "embedding $KARNAK_KERNELCACHE as FV kernelcache"
+  cp "$KARNAK_KERNELCACHE" "$SYNTH_DIR/kernelcache"
+fi
+
+# PcdKarnakSyntheticKernelTest only controls whether the probe auto-starts
+# XnuLoader at ReadyToBoot; it works for any kernelcache payload.
+if [[ "${KARNAK_AUTORUN_XNU:-0}" == "1" ]]; then
+  DSC="$EDK2_DIR/Platform/Amazon/KarnakPkg/Karnak.dsc"
+  sed -i 's/^\([[:space:]]*gKarnakPkgTokenSpaceGuid\.PcdKarnakSyntheticKernelTest|\)FALSE/\1TRUE/' "$DSC"
+  grep -q 'PcdKarnakSyntheticKernelTest|TRUE' "$DSC" || {
+    echo "error: could not enable XnuLoader autorun in $DSC" >&2
+    exit 1
+  }
+  echo "XnuLoader will run automatically at ReadyToBoot"
+fi
 
 # Reject stale generated hardware values before spending minutes compiling.
 if python3 -c 'import libfdt' >/dev/null 2>&1; then

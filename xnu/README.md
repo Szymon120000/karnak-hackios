@@ -127,5 +127,20 @@ missing.  The first real hardware attempt should show the `0002` banner on
 UART0, then the `0003` GIC line, followed by one line per secondary CPU from
 `KarnakCPU`.
 
+To build a boot image that carries the real kernel in the FV instead of the
+synthetic test payload, pass it to the LK image build:
+
+```sh
+SKIP_FETCH=1 KARNAK_KERNELCACHE=xnu-kernel-out/kernel.development.karnak \
+  KARNAK_AUTORUN_XNU=1 \
+  ./scripts/build_lk_image.sh --stock device-backup/boot-stock.img \
+      --inject-from device-backup/boot-stock.img DEBUG
+```
+
+The FV is LZMA-compressed as a whole, so the 16 MiB kernel fits in the 7 MiB
+FD (the uncompressed FVMAIN grows to ~22 MiB).  `KARNAK_AUTORUN_XNU=1` flips
+`PcdKarnakSyntheticKernelTest` in the staged DSC so `KarnakProbeDxe` starts
+`XnuLoader.efi` at `ReadyToBoot`; no shell input is needed.
+
 `xnu.yml` also runs the host-side board, early-console, boot_args and Mach-O
 tests plus the patch-series check on every push.
