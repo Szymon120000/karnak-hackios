@@ -369,7 +369,8 @@ RunSyntheticKernelTest (
   /* XnuLoader does not return on success: it ends boot services and enters
      the synthetic kernel, which paints the panel and hangs. */
   Status = gBS->StartImage (AppHandle, NULL, NULL);
-  Print (L"KarnakProbe: XnuLoader returned (%r)\n", Status);
+  Print (L"KarnakProbe: XnuLoader returned (%r); halting for diagnostics\n", Status);
+  CpuDeadLoop ();
 }
 
 STATIC

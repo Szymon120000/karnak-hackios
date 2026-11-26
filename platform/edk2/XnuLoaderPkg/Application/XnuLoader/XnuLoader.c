@@ -443,6 +443,16 @@ UefiMain (
     return Status;
   }
 
+  Print (L"XnuLoader: read %s: %lu bytes, first 16:",
+         KernelPath, (UINT64)ImageSize);
+  if (ImageSize >= 16) {
+    UINT32  *Words;
+    Words = (UINT32 *)Image;
+    Print (L" %08x %08x %08x %08x\n", Words[0], Words[1], Words[2], Words[3]);
+  } else {
+    Print (L" (too short)\n");
+  }
+
   Status = XnuImageParse (Image, ImageSize, &Info);
   if (EFI_ERROR (Status)) {
     Print (L"XnuLoader: %s is not a usable ARM64 Mach-O (%r)\n",

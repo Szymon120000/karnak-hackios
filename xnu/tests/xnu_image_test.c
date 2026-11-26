@@ -272,6 +272,24 @@ AddUnixThread (
 }
 
 static void
+TestZeroVmMetadataSegment (void)
+{
+  unsigned char  buf[0x4000];
+  XNU_IMAGE_INFO info;
+  size_t         size = BuildImage (buf, sizeof (buf));
+
+  /* Apple kernels carry __CTF with vmsize 0 but file bytes.  It is not
+     mapped, so the file-fits-in-VM rule must not apply to it. */
+  Put64 (buf + 32 + 72 + 72 + 32, 0);     /* __LINKEDIT vmsize */
+  CHECK (XnuImageParse (buf, size, &info) == EFI_SUCCESS);
+  CHECK (!info.Segment[2].Loadable);
+
+  /* A loadable segment with more file bytes than VM bytes is still bad. */
+  Put64 (buf + 32 + 72 + 72 + 32, 0x800);
+  CHECK (XnuImageParse (buf, size, &info) == EFI_VOLUME_CORRUPTED);
+}
+
+static void
 TestUnixThreadEntry (void)
 {
   unsigned char  buf[0x4000];
@@ -311,6 +329,7 @@ main (void)
   TestMisalignedCommandSize ();
   TestCorruptCounts ();
   TestBssAndRounding ();
+  TestZeroVmMetadataSegment ();
   TestUnixThreadEntry ();
 
   if (failures) {

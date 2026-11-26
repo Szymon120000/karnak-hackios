@@ -239,7 +239,10 @@ XnuImageParse (
         }
         FileBytes = AddSat (FileBytes, Seg.FileSize);
       }
-      if (Seg.FileSize > Seg.VmSize) {
+      /* Non-loadable metadata segments (for example __CTF) may have
+         VmSize 0 while still carrying bytes in the file.  Only enforce the
+         file-fits-in-VM rule for segments that are actually mapped. */
+      if (Seg.Loadable && (Seg.FileSize > Seg.VmSize)) {
         return EFI_VOLUME_CORRUPTED;
       }
 
