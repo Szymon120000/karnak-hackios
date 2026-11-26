@@ -94,15 +94,16 @@ the real staging and then re-runs it to prove idempotence.
 
 ## Building the kernel
 
-The full build still needs macOS + a KDK.  The intended path is the same as
-`ios-sweet/.github/workflows/xnu.yml`: fetch `blacktop/darwin-xnu-build`, put
-the staged source (or the patch series) into `dxb`, and build with
-`MACHINE_CONFIG=KARNAK` on a macOS runner.  Xcode 15 (macos-14) is required
-for the iig/IORPC ABI of xnu-8796.
+The full build still needs macOS + a KDK.  `xnu.yml`'s `kernel` job (manual:
+set `build_kernel` when dispatching) fetches `blacktop/darwin-xnu-build` at a
+pinned commit, stages this tree into `dxb/xnu` with `scripts/stage_xnu.sh`,
+and builds with `MACHINE_CONFIG=KARNAK`.  Xcode 15 (macos-14) is required for
+the iig/IORPC ABI of xnu-8796; the job builds plain arm64 (no arm64e slice)
+because the Cortex-A53 has no pointer authentication.
 
-`xnu.yml` in this repository runs the host-side board, early-console,
-boot_args and Mach-O tests plus the patch-series check.  Its `kernel` job is
-manual and does not claim to produce a kernel yet: the MSDC0 block driver and
-rootfs listed above are still missing.  The first real hardware attempt should
-show the `0002` banner on UART0, then the `0003` GIC line, followed by one line
-per secondary CPU from `KarnakCPU`.
+`xnu.yml` also runs the host-side board, early-console, boot_args and Mach-O
+tests plus the patch-series check on every push.  The kernel job does not
+claim to produce a bootable kernel yet: the MSDC0 block driver and rootfs
+listed above are still missing.  The first real hardware attempt should show
+the `0002` banner on UART0, then the `0003` GIC line, followed by one line per
+secondary CPU from `KarnakCPU`.
