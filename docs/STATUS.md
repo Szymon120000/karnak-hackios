@@ -49,7 +49,7 @@
   hardware boot test (which is still pending).
 - **XNU patch series**: `scripts/stage_xnu.sh` fetches the pinned
   `xnu-8796.141.3` tag (iOS 16.6 / Darwin 22.6), copies the overlay (including
-  `config/MASTER.arm64.karnak`) and applies nine reviewed patches; CI stages a
+  `config/MASTER.arm64.karnak`) and applies ten reviewed patches; CI stages a
   real tree and re-runs the staging to prove idempotence.  The macOS job
   produces a linked arm64 `kernel.development.karnak`; hardware boot and the
   storage/rootfs work are still pending.
@@ -122,8 +122,9 @@ The first on-device test is the UEFI stage only (`LK -> BootShim -> EDK2`):
   non-loadable `__CTF` metadata segment, is copied to `0x51e02000`, gets valid
   `boot_args` and is entered with the MMU/caches off.  The loader prints
   `EL2: exiting boot services and handing off`; no kernel console exists on
-  hardware yet (UART0 is not wired, so `0009` adds a pre-MMU framebuffer
-  marker and the board hook enables XNU's framebuffer text console).
+  hardware yet (UART0 is not wired).  `0009` adds pre-MMU framebuffer markers
+  and `0010` routes `kprintf` to a small in-kernel framebuffer console, so
+  boot progress and panics are photographed from the panel.
 - Verified on hardware (loader end-to-end): with
   `PcdKarnakSyntheticKernelTest=TRUE` the probe loads `XnuLoader.efi` from the
   FV at `ReadyToBoot`.  The loader opens the named FV file `kernelcache`

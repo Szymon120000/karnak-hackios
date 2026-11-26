@@ -61,6 +61,25 @@ void karnak_early_mark(const char *tag, unsigned long long value);
 void karnak_early_range(const char *tag, unsigned long long base,
     unsigned long long size);
 
+/*
+ * Minimal framebuffer text console.
+ *
+ * XNU's own video console needs a GOP/PE_Video handshake that does not work
+ * reliably on this boot path, so karnak draws ISO 8x16 glyphs straight into
+ * the linear framebuffer instead.  Once karnak_fb_console_init() succeeds the
+ * board hook selects it as console ops index 2, which means ordinary kprintf
+ * output (including panics) lands on the panel.
+ *
+ * All of these are no-ops until karnak_fb_console_init() has been called.
+ * karnak_fb_getc() always returns 0; the panel is output-only.
+ */
+void karnak_fb_console_init(unsigned long long base_addr,
+    unsigned long long row_bytes, unsigned long long width,
+    unsigned long long height, unsigned long long depth);
+int karnak_fb_is_ready(void);
+void karnak_fb_putc(char c, int poll);
+int karnak_fb_getc(int wait);
+
 #ifdef __cplusplus
 }
 #endif

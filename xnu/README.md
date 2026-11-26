@@ -120,9 +120,12 @@ generates code against and `0005` carries the other two Xcode 16 compile
 fixes (the retired macos-14 runner had Xcode 15 and needed none of them).  The job builds plain arm64 (no arm64e slice) because the
 Cortex-A53 has no pointer authentication.
 
-`0009` adds two pre-MMU framebuffer markers to `start.s`, and
-`karnak_board_early_init()` brings up XNU's framebuffer text console, so the
-first hardware boot can be observed without a wired UART.
+`0009` adds two pre-MMU framebuffer markers to `start.s`.  `0010` adds a third
+console op (`karnak_fb_putc`) that draws ISO 8x16 glyphs directly into the
+linear framebuffer; `karnak_board_early_init()` maps `boot_args->Video` and
+selects it, so ordinary `kprintf` and panic output are visible on the panel
+without a wired UART.  XNU's own video console is not used for bring-up: the
+PE_Video/initialize_screen handshake never rendered text on this boot path.
 
 The current patch series compiles and links a plain arm64
 `kernel.development.karnak` (run `45874882827`); the workflow uploads the real

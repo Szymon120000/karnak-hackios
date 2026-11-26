@@ -1,0 +1,30 @@
+diff --git a/osfmk/console/serial_console.c b/osfmk/console/serial_console.c
+index e5b23f2..fdc8124 100644
+--- a/osfmk/console/serial_console.c
++++ b/osfmk/console/serial_console.c
+@@ -113,6 +113,12 @@ static struct {
+ extern int serial_getc(void);
+ extern void serial_putc_options(char, bool);
+ 
++#if defined(KARNAK)
++/* Framebuffer text console implemented in pexpert/arm64/board_mt8163.c. */
++extern void karnak_fb_putc(char, int);
++extern int karnak_fb_getc(int);
++#endif
++
+ #if DEBUG || DEVELOPMENT
+ TUNABLE(bool, allow_printf_from_interrupts_disabled_context, "nointr_consio", false);
+ #else
+@@ -126,6 +132,12 @@ SECURITY_READ_ONLY_EARLY(struct console_ops) cons_ops[] = {
+ 	{
+ 		.putc = vcputc_options, .getc = _vcgetc,
+ 	},
++#if defined(KARNAK)
++	{
++		.putc = (void (*)(char, bool))karnak_fb_putc,
++		.getc = (int (*)(bool))karnak_fb_getc,
++	},
++#endif
+ };
+ 
+ SECURITY_READ_ONLY_EARLY(uint32_t) nconsops = (sizeof cons_ops / sizeof cons_ops[0]);
