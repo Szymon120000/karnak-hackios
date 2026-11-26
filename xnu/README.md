@@ -43,7 +43,9 @@ This directory contains:
   asm labels, the no-op monitor hook).  The overlay also provides the missing
   AMCC/SART/UAT/tunables no-ops and a kpc backend that reports no counters.
   `0007` gives the 4K-page karnak kernel the iOS-style 64 GiB user VA limit,
-  which pmap's commpage nesting assert requires.
+  which pmap's commpage nesting assert requires; `0008` drops the KPI export
+  entries for Apple's closed IOMMU/PPL symbols (DART/SART/UAT, `pmap_iommu_*`,
+  `IOUnifiedAddressTranslator`), which this kernel does not define.
 - `include/pexpert/...` — vendored xnu-8796 arm64 `boot.h` used only by the
   host test that asserts the firmware `boot_args` layout (see the README there).
 - `tests/boot_args_test.c` — verifies `KarnakBootArgsLib` (in XnuLoaderPkg)
