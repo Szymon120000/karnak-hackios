@@ -119,9 +119,13 @@ generates code against and `0005` carries the other two Xcode 16 compile
 fixes (the retired macos-14 runner had Xcode 15 and needed none of them).  The job builds plain arm64 (no arm64e slice) because the
 Cortex-A53 has no pointer authentication.
 
+The current patch series compiles and links a plain arm64
+`kernel.development.karnak` (run `45874882827`); the workflow uploads the real
+binary plus its `.unstripped`/dSYM as `xnu-kernel-karnak`.  It is not bootable
+end-to-end yet: the MSDC0 block driver and rootfs listed above are still
+missing.  The first real hardware attempt should show the `0002` banner on
+UART0, then the `0003` GIC line, followed by one line per secondary CPU from
+`KarnakCPU`.
+
 `xnu.yml` also runs the host-side board, early-console, boot_args and Mach-O
-tests plus the patch-series check on every push.  The kernel job does not
-claim to produce a bootable kernel yet: the MSDC0 block driver and rootfs
-listed above are still missing.  The first real hardware attempt should show
-the `0002` banner on UART0, then the `0003` GIC line, followed by one line per
-secondary CPU from `KarnakCPU`.
+tests plus the patch-series check on every push.

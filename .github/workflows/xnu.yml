@@ -173,8 +173,14 @@ jobs:
         if: always()
         run: |
           mkdir -p out
-          cp -R dxb/build/xnu.obj/kernel.* out/ 2>/dev/null || true
+          # xnu.obj/kernel.* are relative symlinks into the per-config directory;
+          # copying those leaves broken links in the artifact, so copy the real
+          # files instead.
+          KOBJ="dxb/build/xnu.obj/${KERNEL_CONFIG}_ARM64_${MACHINE_CONFIG}"
+          cp "$KOBJ"/kernel.*.karnak "$KOBJ"/kernel.*.karnak.unstripped out/ 2>/dev/null || true
+          cp -R "$KOBJ"/kernel.*.karnak.dSYM out/ 2>/dev/null || true
           (cd out && shasum -a 256 kernel.* > SHA256SUMS) || true
+          file out/kernel.* 2>/dev/null || true
           ls -la out
 
       - uses: actions/upload-artifact@v4
