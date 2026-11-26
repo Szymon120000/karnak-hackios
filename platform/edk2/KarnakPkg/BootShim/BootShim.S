@@ -178,12 +178,5 @@ _Dead:
 	/* Should never be reached. */
 	b	_Dead
 
-	/* Keep the literal pool before the payload so BootShim.bin ends exactly
-	 * at _Payload: scripts/build_uefi.sh appends the FD there. */
+	/* Keep the literal pool after the code; BootShim.bin ends here. */
 	.ltorg
-
-.text
-.align 4
-
-_Payload:
-	/* The EDK2 FD is appended here by PlatformBuild.py. */

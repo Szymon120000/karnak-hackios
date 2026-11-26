@@ -19,7 +19,10 @@
   - runtime memory map from the saved DTB (falls back to the DTS floor),
   - `DtPlatformDxe` fed by `KarnakDtbLoaderLib`,
   - UART0 console at 921600 (LK-configured),
-  - SimpleFbDxe, watchdog kicker, shell, FAT, USB, RamDisk.
+  - `KarnakFbDxe` GOP on the LK framebuffer (see Framebuffer below),
+  - no-op watchdog architectural protocol (`KarnakWatchdogDxe`), required by
+    DxeCore before BDS can start,
+  - shell, FAT, USB, RamDisk.
 - **XnuImageLib** (`platform/edk2/XnuLoaderPkg/Library/XnuImageLib`): validates
   an ARM64 Mach-O kernel, records its loadable segments, computes the physical
   footprint on 16 KiB pages and checks a proposed destination against reserved
@@ -60,8 +63,13 @@
   `0x40000000+0x40000000` and `0x80000000+0x19600000` (top `0x99600000`,
   ~1.4 GiB usable), so the 512 MiB DTS value is only the build-time floor.
 - **Framebuffer**: `/chosen:atag,videolfb` on the same device gives
-  `fb_base=0x98800000`, `vram=0x00e00000`.  SimpleFbDxe is still driven by a
+  `fb_base=0x98800000`, `vram=0x00e00000`.  `KarnakFbDxe` is still driven by a
   fixed PCD pinned to those verified values; it should read the property.
+  It declares RGBA byte order (the panel scans bytes R,G,B,A) and cleans the
+  dirty cache lines after each Blt.  `EfiBltBufferToVideo` bypasses
+  `FrameBufferBltLib` with a direct copy: the library's RGB-reserved
+  conversion path silently produced nothing on this panel, which is why
+  console text and glyphs were invisible while solid fills worked.
 
 ## Hardware test readiness
 
@@ -76,9 +84,14 @@ The first on-device test is the UEFI stage only (`LK -> BootShim -> EDK2`):
   `KARN_RAMDISK_BASE` (0x43480000, from the stock boot header) to
   `KARN_UEFI_BASE`.  The DTB is taken from `KARNAK_DTB=<file>` or extracted
   from `device-backup/boot-stock.img` with `tools/extract_dtb.py`.
-- Verified on hardware: LK executes the payload, BootShim runs, and the real
-  EDK2 firmware takes over.  With `PcdKarnakBringupMarkers=TRUE`,
-  `KarnakProbeDxe` paints its colour bands and then fills the screen magenta.
+- Verified on hardware: LK executes the payload, BootShim runs, the real
+  EDK2 firmware takes over, DXE dispatches, and **BDS completes**:
+  `KarnakProbeDxe` paints yellow at EndOfDxe and blue at ReadyToBoot, then the
+  UEFI Shell starts and is **readable on the panel** (white-on-blue text,
+  `FS0:`/`FS1:` mapping table, `Shell>` prompt).  With
+  `PcdKarnakBringupMarkers=TRUE` the probe also draws solid
+  buffer-to-video squares and an 8x8 `A` glyph; the Shell clears them when it
+  starts, which is expected.
   The shim's framebuffer write is BGRA8888 (opaque red is `0xFF0000FF`).
 - `tools/check_boot_image.py` enforces the appended DTB and the ramdisk FD for
   v0 images; `tools/test_extract_dtb.py` and `tools/test_check_boot_image.py`
@@ -96,9 +109,9 @@ The first on-device test is the UEFI stage only (`LK -> BootShim -> EDK2`):
   why the shim and `WatchDogDxe` now disable the watchdog.  The same log gave
   the real framebuffer base, replacing the 512 MiB fallback.
 
-Expected on success: the shim's blue band followed by the UEFI console/shell
-plus `KarnakInfoDxe` DTB/DRAM lines.  There is no XNU kernel and no internal
-eMMC driver yet.
+Expected on success: UEFI console/shell on the panel, with `FS0:` (the
+firmware volume) and `FS1:` (the GPIO/regulator RAM disk) mapped.  There is no
+XNU kernel and no internal eMMC driver yet.
 
 ## Boot chain checkpoints
 

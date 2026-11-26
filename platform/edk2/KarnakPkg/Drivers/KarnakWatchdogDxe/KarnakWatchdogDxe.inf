@@ -1,0 +1,31 @@
+/** @file
+  No-op watchdog timer architectural protocol so DxeCore's architectural
+  protocol assert passes before BDS without arming a reset timer.
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+**/
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = KarnakWatchdogDxe
+  FILE_GUID                      = 8B3C1A52-6D7E-4F09-A1C4-3E5D2B8F7A60
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = KarnakWatchdogDxeEntry
+
+[Sources]
+  KarnakWatchdogDxe.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+
+[LibraryClasses]
+  BaseLib
+  DebugLib
+  UefiBootServicesTableLib
+  UefiDriverEntryPoint
+
+[Protocols]
+  gEfiWatchdogTimerArchProtocolGuid ## PRODUCES
+
+[Depex]
+  TRUE

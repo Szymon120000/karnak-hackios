@@ -111,6 +111,13 @@
   # Minimal platform identification driver (prints DRAM + DTB source).
   KarnakPkg/Drivers/KarnakInfoDxe/KarnakInfoDxe.inf
 
+  # GOP on the LK framebuffer.  Karnak fork of MediaTekPkg SimpleFbDxe:
+  # RGBA byte order and cache maintenance after each Blt.
+  KarnakPkg/Drivers/KarnakFbDxe/KarnakFbDxe.inf
+
+  # No-op watchdog architectural protocol (DxeCore asserts without it).
+  KarnakPkg/Drivers/KarnakWatchdogDxe/KarnakWatchdogDxe.inf
+
   # Bring-up probe: colour pattern once the GOP exists (see PCD above).
   KarnakPkg/Drivers/KarnakProbeDxe/KarnakProbeDxe.inf
 

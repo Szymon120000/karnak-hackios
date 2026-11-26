@@ -22,12 +22,17 @@
 [LibraryClasses]
   BaseLib
   DebugLib
+  MemoryAllocationLib
   PcdLib
   UefiBootServicesTableLib
   UefiDriverEntryPoint
 
 [Protocols]
   gEfiGraphicsOutputProtocolGuid
+
+[Guids]
+  gEfiEndOfDxeEventGroupGuid
+  gEfiEventReadyToBootGuid
 
 [FixedPcd]
   gKarnakPkgTokenSpaceGuid.PcdKarnakBringupMarkers

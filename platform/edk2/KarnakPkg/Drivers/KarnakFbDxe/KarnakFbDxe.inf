@@ -1,0 +1,58 @@
+/** @file
+  karnak's Graphics Output Protocol on the LK framebuffer.
+
+  Fork of MediaTekPkg/SimpleFbDxe with two MT8163 fixes: the panel scans
+  RGBA byte order (not BGRA) and each Blt is cache-cleaned so the panel DMA
+  sees the pixels.  See KarnakFbDxe.c.
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+**/
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = KarnakFbDxe
+  FILE_GUID                      = 5A1E7C3D-2B4F-4E9A-8D61-7C0B5A2E9F41
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = KarnakFbDxeInitialize
+
+[Sources.common]
+  KarnakFbDxe.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  EmbeddedPkg/EmbeddedPkg.dec
+  ArmPkg/ArmPkg.dec
+  MediaTekPkg/MediaTekPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  ReportStatusCodeLib
+  UefiLib
+  UefiBootServicesTableLib
+  UefiDriverEntryPoint
+  BaseMemoryLib
+  DebugLib
+  PcdLib
+  FrameBufferBltLib
+  CacheMaintenanceLib
+
+[Protocols]
+  gEfiGraphicsOutputProtocolGuid ## PRODUCES
+  gEfiCpuArchProtocolGuid
+
+[FixedPcd]
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferAddress
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferWidth
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferHeight
+  gMediaTekTokenSpaceGuid.PcdMipiFrameBufferLayers
+
+[Guids]
+  gEfiMdeModulePkgTokenSpaceGuid
+
+[Pcd]
+  gEfiMdeModulePkgTokenSpaceGuid.PcdVideoHorizontalResolution
+  gEfiMdeModulePkgTokenSpaceGuid.PcdVideoVerticalResolution
+
+[Depex]
+  gEfiCpuArchProtocolGuid

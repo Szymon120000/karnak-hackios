@@ -54,7 +54,7 @@ def main(argv=None) -> int:
             kernel_size, = struct.unpack_from("<I", data, base + 8)
             header_version, = struct.unpack_from("<I", data, base + 40)
             print("note: amonet microloader stub at 0x0; "
-                  "reading the real header at 0x400")
+                  "reading the real header at 0x400", file=sys.stderr)
 
     print(f"image            {args.image}")
     print(f"size             {len(data)} bytes")

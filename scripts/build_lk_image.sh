@@ -39,7 +39,7 @@ if [[ -n "$STOCK" ]]; then
   [[ -f "$STOCK" ]] || { echo "error: no such file: $STOCK" >&2; exit 1; }
   echo "reading LK load addresses from $STOCK"
   python3 "$ROOT/tools/boot_header.py" "$STOCK"
-  eval "$(python3 "$ROOT/tools/boot_header.py" "$STOCK" --shell)"
+  eval "$(python3 "$ROOT/tools/boot_header.py" "$STOCK" --shell | grep '^LK_')"
   [[ -z "$KERNEL_ADDR" ]] && KERNEL_ADDR="$LK_KERNEL_ADDR"
   [[ -z "$TAGS_ADDR" ]] && TAGS_ADDR="$LK_TAGS_ADDR"
   [[ -z "$PAGE_SIZE" ]] && PAGE_SIZE="$LK_PAGE_SIZE"

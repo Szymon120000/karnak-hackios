@@ -24,6 +24,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The EDK2 build runs with a different working directory, so make any
+# user-supplied input paths absolute now.
+[[ -n "${KARNAK_DTB:-}" ]] && KARNAK_DTB="$(realpath "$KARNAK_DTB")"
+[[ -n "${KARNAK_STOCK_BOOT:-}" ]] && KARNAK_STOCK_BOOT="$(realpath "$KARNAK_STOCK_BOOT")"
 EDK2_DIR="$ROOT/vendor/edk2-mtk"
 TARGET="${1:-${TARGET:-DEBUG}}"
 # GCC5 is the toolchain MediaTek's tree is validated against and produces ELF

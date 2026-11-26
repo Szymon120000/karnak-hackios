@@ -56,6 +56,9 @@ READ_LOCK_STATUS   = TRUE
   INF MdeModulePkg/Universal/ReportStatusCodeRouter/RuntimeDxe/ReportStatusCodeRouterRuntimeDxe.inf
   INF MdeModulePkg/Universal/StatusCodeHandler/RuntimeDxe/StatusCodeHandlerRuntimeDxe.inf
   INF EmbeddedPkg/MetronomeDxe/MetronomeDxe.inf
+  # No-op watchdog architectural protocol: DxeCore asserts if it is missing,
+  # and MdeModulePkg's real WatchdogTimerDxe resets the machine on expiry.
+  INF KarnakPkg/Drivers/KarnakWatchdogDxe/KarnakWatchdogDxe.inf
 
   # Consoles: serial first, then GOP/text so bring-up is visible either way.
   INF EmbeddedPkg/SimpleTextInOutSerial/SimpleTextInOutSerial.inf
@@ -73,7 +76,7 @@ READ_LOCK_STATUS   = TRUE
   # slow or stuck boot into a silent warm reset, which is exactly the failure
   # this port is chasing.  BootShim and WatchDogDxe already stop the MTK WDT.
 
-  INF MediaTekPkg/Drivers/SimpleFbDxe/SimpleFbDxe.inf
+  INF KarnakPkg/Drivers/KarnakFbDxe/KarnakFbDxe.inf
   INF MediaTekPkg/Drivers/WatchDogDxe/WatchDogDxe.inf
   INF MediaTekPkg/Drivers/RamDiskDxe/RamDiskDxe.inf
   INF MediaTekPkg/Drivers/LogoDxe/LogoDxe.inf
