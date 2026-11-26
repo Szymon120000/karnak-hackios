@@ -20,6 +20,7 @@
 #define HW_UART0_BASE  0x11002000U
 #define HW_FB_WIDTH    800U
 #define HW_FB_HEIGHT   1280U
+#define HW_FB_BASE     0x98800000U
 
 int
 main(void)
@@ -31,6 +32,7 @@ main(void)
 	assert(KARNAK_UART0_PA == HW_UART0_BASE);
 	assert(KARNAK_FB_WIDTH == HW_FB_WIDTH);
 	assert(KARNAK_FB_HEIGHT == HW_FB_HEIGHT);
+	assert(KARNAK_FB_BASE_FALLBACK == HW_FB_BASE);
 	assert(KARNAK_FB_STRIDE == HW_FB_WIDTH * 4);
 	assert(KARNAK_UART_BAUD == 921600);
 	assert(KARNAK_SMP_MAX_CPUS == 4);

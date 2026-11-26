@@ -23,7 +23,9 @@ on:
     branches: [main]
     paths:
       - "xnu/**"
+      - "include/karnak/**"
       - "tools/apply_xnu_patches.py"
+      - "tools/test_karnak_header_sync.py"
       - "scripts/stage_xnu.sh"
       - "platform/edk2/XnuLoaderPkg/**"
       - ".github/workflows/xnu.yml"
@@ -41,6 +43,9 @@ jobs:
               xnu/tests/board_static_test.c \
               -o /tmp/board_static_test
           /tmp/board_static_test
+
+      - name: Check the board header against the generated hardware map
+        run: python3 tools/test_karnak_header_sync.py
 
       - name: Compile and run early console tests
         run: |

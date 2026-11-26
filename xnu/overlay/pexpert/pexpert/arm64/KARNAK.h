@@ -100,7 +100,8 @@
 #define KARNAK_FB_HEIGHT          1280U
 #define KARNAK_FB_STRIDE          (KARNAK_FB_WIDTH * 4U)
 #define KARNAK_FB_BPP             32U
-#define KARNAK_FB_BASE_FALLBACK   0x5EE00000ULL
+/* Retail karnak: fb_top 0x99600000 minus the 14 MiB reservation. */
+#define KARNAK_FB_BASE_FALLBACK   0x98800000ULL
 
 /* ------------------------------------------------------------------- UART */
 /* DTS uart0@11002000, 26 MHz, 921600 8N1 (LK bootargs console=ttyS0). */
