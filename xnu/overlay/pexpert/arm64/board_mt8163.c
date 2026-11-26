@@ -123,7 +123,7 @@ karnak_fb_console_init(unsigned long long base_addr,
 	}
 
 	size = row_bytes * height;
-	karnak_fb = (volatile unsigned int *)ml_io_map(
+	karnak_fb = (volatile unsigned int *)(uintptr_t)ml_io_map(
 	    (vm_offset_t)(base_addr & ~3ULL), (vm_size_t)size);
 	if (karnak_fb == NULL) {
 		karnak_early_puts("KARNAK: framebuffer map failed\n");
