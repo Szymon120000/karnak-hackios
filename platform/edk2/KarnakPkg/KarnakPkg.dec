@@ -25,3 +25,7 @@
   # panel is the only debug output on a retail karnak, so this stays on until
   # the UEFI console itself is proven on hardware.
   gKarnakPkgTokenSpaceGuid.PcdKarnakBringupMarkers|FALSE|BOOLEAN|0x00010005
+  # Bring-up only: at ReadyToBoot, run the ExitBootServices + MMU-off handoff
+  # self-test and hand control to KarnakHandoffTestPayload.  This ends the
+  # boot (no shell) and paints the result; enable it only for a test build.
+  gKarnakPkgTokenSpaceGuid.PcdKarnakHandoffSelfTest|FALSE|BOOLEAN|0x00010006

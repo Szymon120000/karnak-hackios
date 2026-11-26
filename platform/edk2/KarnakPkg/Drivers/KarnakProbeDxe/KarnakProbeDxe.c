@@ -25,16 +25,25 @@
 **/
 #include <Uefi.h>
 #include <Library/BaseLib.h>
+#include <Library/BaseMemoryLib.h>
 #include <Library/DebugLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/PcdLib.h>
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiDriverEntryPoint.h>
+#include <Library/UefiLib.h>
 #include <Protocol/GraphicsOutput.h>
+#include <Protocol/LoadedImage.h>
 #include <Guid/EventGroup.h>
+#include <karnak/hardware_map.h>
+#include <Library/KarnakBootArgsLib.h>
+#include <Library/KarnakHandoffLib.h>
 
-STATIC EFI_EVENT mEndOfDxeEvent;
-STATIC EFI_EVENT mReadyToBootEvent;
+#define FDT_MAGIC  0xD00DFEEDU
+
+STATIC EFI_EVENT  mEndOfDxeEvent;
+STATIC EFI_EVENT  mReadyToBootEvent;
+STATIC EFI_HANDLE mImageHandle;
 
 STATIC EFI_GRAPHICS_OUTPUT_BLT_PIXEL mBlack   = { 0x00, 0x00, 0x00, 0x00 };
 STATIC EFI_GRAPHICS_OUTPUT_BLT_PIXEL mWhite   = { 0xFF, 0xFF, 0xFF, 0x00 };
@@ -42,6 +51,7 @@ STATIC EFI_GRAPHICS_OUTPUT_BLT_PIXEL mRed     = { 0x00, 0x00, 0xFF, 0x00 };
 STATIC EFI_GRAPHICS_OUTPUT_BLT_PIXEL mGreen   = { 0x00, 0xFF, 0x00, 0x00 };
 STATIC EFI_GRAPHICS_OUTPUT_BLT_PIXEL mYellow  = { 0x00, 0xFF, 0xFF, 0x00 };
 STATIC EFI_GRAPHICS_OUTPUT_BLT_PIXEL mBlue    = { 0xFF, 0x00, 0x00, 0x00 };
+STATIC EFI_GRAPHICS_OUTPUT_BLT_PIXEL mCyan    = { 0xFF, 0xFF, 0x00, 0x00 };
 
 STATIC
 VOID
@@ -186,6 +196,130 @@ DrawColorSquare (
   FreePool (Buffer);
 }
 
+/**
+  Bring-up test for the ExitBootServices + MMU-off handoff.
+
+  Builds a real boot_args block, then leaves boot services and branches to
+  KarnakHandoffTestPayload.  The payload paints the result and never returns,
+  so this is the last thing a self-test build does.  Gated by
+  PcdKarnakHandoffSelfTest.
+**/
+STATIC
+VOID
+RunHandoffSelfTest (
+  IN EFI_GRAPHICS_OUTPUT_PROTOCOL *Gop
+  )
+{
+  EFI_STATUS                 Status;
+  EFI_LOADED_IMAGE_PROTOCOL *LoadedImage;
+  KARNAK_BOOT_ARGS_CONFIG    Config;
+  KARNAK_HANDOFF_RANGES      Ranges;
+  EFI_PHYSICAL_ADDRESS       ArgsPage;
+  volatile UINT64           *PointerStore;
+  volatile UINT32           *Dtb;
+  UINT64                     DtbAddress;
+  UINT32                     DtbSize;
+  UINT32                     CurrentEl;
+
+  CurrentEl = KarnakHandoffCurrentEl ();
+  Print (L"KarnakProbe: CurrentEL %u; handoff self-test\n", CurrentEl);
+  if ((CurrentEl != 1) && (CurrentEl != 2)) {
+    Print (L"KarnakProbe: cannot enter XNU at EL1 from EL%u; skipping test\n",
+           CurrentEl);
+    return;
+  }
+
+  Status = gBS->HandleProtocol (
+                  mImageHandle,
+                  &gEfiLoadedImageProtocolGuid,
+                  (VOID **)&LoadedImage
+                  );
+  if (EFI_ERROR (Status)) {
+    Print (L"KarnakProbe: no LoadedImage (%r); skipping test\n", Status);
+    return;
+  }
+
+  DtbAddress = 0;
+  DtbSize    = 0;
+  PointerStore = (volatile UINT64 *)(UINTN)KARN_DTB_PTR_STORE;
+  DtbAddress   = *PointerStore;
+  if (DtbAddress != 0) {
+    Dtb = (volatile UINT32 *)(UINTN)DtbAddress;
+    if (SwapBytes32 (Dtb[0]) == FDT_MAGIC) {
+      DtbSize = SwapBytes32 (Dtb[1]);
+    }
+  }
+
+  if ((DtbAddress == 0) || (DtbSize < sizeof (UINT32)) ||
+      (DtbSize > KARN_DTB_STORE_SIZE))
+  {
+    Print (L"KarnakProbe: no usable shim DTB; skipping handoff test\n");
+    return;
+  }
+
+  ZeroMem (&Config, sizeof (Config));
+  Config.PhysBase         = KARN_DRAM_BASE;
+  Config.MemSize          = KARN_DRAM_SIZE_DTS;
+  Config.TopOfKernelData  = KARN_DRAM_END_DTS;
+  Config.DeviceTree       = (VOID *)(UINTN)DtbAddress;
+  Config.DeviceTreeLength = DtbSize;
+  Config.CommandLine      = "karnak handoff self-test";
+  Config.Video.BaseAddress = Gop->Mode->FrameBufferBase;
+  Config.Video.RowBytes    = (UINT64)Gop->Mode->Info->PixelsPerScanLine * 4;
+  Config.Video.Width       = Gop->Mode->Info->HorizontalResolution;
+  Config.Video.Height      = Gop->Mode->Info->VerticalResolution;
+  Config.Video.Depth       = 32;
+
+  ArgsPage = 0;
+  Status   = gBS->AllocatePages (AllocateAnyPages, EfiLoaderData, 1, &ArgsPage);
+  if (EFI_ERROR (Status)) {
+    Print (L"KarnakProbe: boot_args allocation failed (%r)\n", Status);
+    return;
+  }
+
+  ZeroMem ((VOID *)(UINTN)ArgsPage, EFI_PAGE_SIZE);
+  Status = KarnakBootArgsInit ((KARNAK_BOOT_ARGS *)(UINTN)ArgsPage, &Config);
+  if (EFI_ERROR (Status)) {
+    Print (L"KarnakProbe: boot_args init failed (%r)\n", Status);
+    gBS->FreePages (ArgsPage, 1);
+    return;
+  }
+
+  Ranges.KernelStart   = (UINT64)(UINTN)KarnakHandoffTestPayload;
+  Ranges.KernelEnd     = (UINT64)(UINTN)KarnakHandoffTestPayloadEnd;
+  Ranges.BootArgsStart = (UINT64)ArgsPage;
+  Ranges.BootArgsEnd   = (UINT64)ArgsPage + sizeof (KARNAK_BOOT_ARGS);
+  Ranges.ImageStart    = (UINT64)(UINTN)LoadedImage->ImageBase;
+  Ranges.ImageEnd      = Ranges.ImageStart + LoadedImage->ImageSize;
+  Ranges.DtbStart      = DtbAddress;
+  Ranges.DtbEnd        = DtbAddress + DtbSize;
+
+  Print (L"KarnakProbe: handoff entry 0x%lx args 0x%lx EL%u\n",
+         Ranges.KernelStart, (UINT64)ArgsPage, CurrentEl);
+  Print (L"KarnakProbe: image 0x%lx + 0x%lx, boot_args %u bytes\n",
+         Ranges.ImageStart, (UINT64)LoadedImage->ImageSize,
+         (UINT32)sizeof (KARNAK_BOOT_ARGS));
+
+  /* Cyan means "about to call ExitBootServices".  The payload replaces it
+   * with white + a result colour. */
+  FillRect (Gop, 0, 0, Gop->Mode->Info->HorizontalResolution,
+            Gop->Mode->Info->VerticalResolution, &mCyan);
+  gBS->Stall (200 * 1000);
+
+  Status = KarnakHandoffExitBootServices (mImageHandle);
+  if (EFI_ERROR (Status)) {
+    Print (L"KarnakProbe: ExitBootServices failed (%r); not handing off\n",
+           Status);
+    FillRect (Gop, 0, 0, Gop->Mode->Info->HorizontalResolution,
+              Gop->Mode->Info->VerticalResolution, &mRed);
+    return;
+  }
+
+  /* No boot services after this point. */
+  KarnakXnuHandoff (Ranges.KernelStart, (UINT64)ArgsPage, &Ranges);
+  CpuDeadLoop ();
+}
+
 STATIC
 VOID
 EFIAPI
@@ -212,6 +346,10 @@ ReadyToBootNotify (
   }
 
   PrintBanner (L"KARNAK READY TO BOOT V5\r\n", EFI_WHITE | EFI_BACKGROUND_BLUE);
+
+  if (FixedPcdGetBool (PcdKarnakHandoffSelfTest) && (Gop != NULL)) {
+    RunHandoffSelfTest (Gop);
+  }
 }
 
 EFI_STATUS
@@ -227,8 +365,8 @@ KarnakProbeDxeEntry (
   UINT32                        Height;
   UINT32                        Stripe;
 
-  (VOID)ImageHandle;
   (VOID)SystemTable;
+  mImageHandle = ImageHandle;
 
   if (!FixedPcdGetBool (PcdKarnakBringupMarkers)) {
     return EFI_SUCCESS;

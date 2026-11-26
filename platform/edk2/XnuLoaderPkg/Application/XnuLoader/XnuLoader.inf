@@ -1,5 +1,5 @@
 /** @file
-  XnuLoader UEFI application (validation only, no handoff yet).
+  XnuLoader UEFI application: validate an ARM64 kernelcache and hand off.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
@@ -26,11 +26,13 @@
   BaseMemoryLib
   MemoryAllocationLib
   KarnakBootArgsLib
+  KarnakHandoffLib
   XnuImageLib
 
 [Protocols]
   gEfiSimpleFileSystemProtocolGuid
   gEfiLoadedImageProtocolGuid
+  gEfiGraphicsOutputProtocolGuid
 
 [Guids]
   gEfiFileInfoGuid

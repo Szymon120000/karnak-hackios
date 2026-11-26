@@ -81,6 +81,10 @@
   # Bring-up only: paint a colour pattern from KarnakProbeDxe so the panel
   # proves the LK -> shim -> DXE chain without a UART.
   gKarnakPkgTokenSpaceGuid.PcdKarnakBringupMarkers|TRUE
+  # Bring-up: set TRUE to run the ExitBootServices + MMU-off self-test at
+  # ReadyToBoot.  That intentionally ends the boot (no shell) and paints the
+  # result: white + green means boot_args valid and the CPU reached EL1.
+  gKarnakPkgTokenSpaceGuid.PcdKarnakHandoffSelfTest|FALSE
 
 [LibraryClasses.common]
   # karnak overrides: generated-from-DTS UART console and FDT access.
@@ -92,6 +96,7 @@
   PlatformMemoryMapLib|KarnakPkg/Library/PlatformMemoryMapLib/PlatformMemoryMapLib.inf
   XnuImageLib|XnuLoaderPkg/Library/XnuImageLib/XnuImageLib.inf
   KarnakBootArgsLib|XnuLoaderPkg/Library/KarnakBootArgsLib/KarnakBootArgsLib.inf
+  KarnakHandoffLib|XnuLoaderPkg/Library/KarnakHandoffLib/KarnakHandoffLib.inf
 
 [LibraryClasses.common.DXE_DRIVER]
   # More specific than the MediaTekCommonDsc.inc mapping, so this overrides it

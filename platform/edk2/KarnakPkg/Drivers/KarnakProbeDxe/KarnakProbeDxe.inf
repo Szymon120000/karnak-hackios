@@ -18,17 +18,23 @@
   MdePkg/MdePkg.dec
   MdeModulePkg/MdeModulePkg.dec
   KarnakPkg/KarnakPkg.dec
+  XnuLoaderPkg/XnuLoaderPkg.dec
 
 [LibraryClasses]
   BaseLib
+  BaseMemoryLib
   DebugLib
   MemoryAllocationLib
   PcdLib
   UefiBootServicesTableLib
   UefiDriverEntryPoint
+  UefiLib
+  KarnakBootArgsLib
+  KarnakHandoffLib
 
 [Protocols]
   gEfiGraphicsOutputProtocolGuid
+  gEfiLoadedImageProtocolGuid
 
 [Guids]
   gEfiEndOfDxeEventGroupGuid
@@ -36,6 +42,7 @@
 
 [FixedPcd]
   gKarnakPkgTokenSpaceGuid.PcdKarnakBringupMarkers
+  gKarnakPkgTokenSpaceGuid.PcdKarnakHandoffSelfTest
 
 [Depex]
   gEfiGraphicsOutputProtocolGuid

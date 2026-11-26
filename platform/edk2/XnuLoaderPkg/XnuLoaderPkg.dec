@@ -17,3 +17,5 @@
   XnuImageLib|Include/Library/XnuImageLib.h
   ## XNU ARM64 boot_args builder.
   KarnakBootArgsLib|Include/Library/KarnakBootArgsLib.h
+  ## ExitBootServices + MMU-off handoff and the bring-up payload.
+  KarnakHandoffLib|Include/Library/KarnakHandoffLib.h

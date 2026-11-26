@@ -1,19 +1,20 @@
 /** @file
   XnuLoader: last UEFI stage before XNU.
 
-  Current scope: find `\xnu\kernelcache` on the boot volume, validate it with
-  XnuImageLib, check that its physical placement would not collide with the
-  firmware or the DTB copy window, and then refuse to boot.  The boot_args
-  builder and the ExitBootServices handoff are intentionally missing: see
-  ../README.md for why and what they need.
+  Finds `\xnu\kernelcache` on the boot volume, validates it with XnuImageLib,
+  copies its segments into allocator-provided memory, builds the XNU ARM64
+  boot_args block, leaves boot services and branches to the entry point with
+  the MMU and caches off (see KarnakHandoffLib).
 
-  Running it is still useful: it proves the file/driver path and prints the
-  segment map that the real handoff will use.
+  A kernel built for karnak does not exist yet; the path is exercised by
+  KarnakProbeDxe's PcdKarnakHandoffSelfTest, which uses the same handoff
+  routine with a payload that paints the result on the panel.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
 #include <Uefi.h>
 #include <Guid/FileInfo.h>
+#include <Protocol/GraphicsOutput.h>
 #include <Protocol/SimpleFileSystem.h>
 #include <Protocol/LoadedImage.h>
 #include <Library/BaseMemoryLib.h>
@@ -22,6 +23,7 @@
 #include <Library/UefiLib.h>
 #include <karnak/hardware_map.h>
 #include <Library/KarnakBootArgsLib.h>
+#include <Library/KarnakHandoffLib.h>
 #include <Library/XnuImageLib.h>
 
 #define XNU_KERNEL_PATH        L"\\xnu\\kernelcache"
@@ -149,6 +151,221 @@ PreviewBootArgs (
   }
 }
 
+STATIC CONST struct {
+  UINT64      Base;
+  UINT64      Size;
+  CONST CHAR8 *Name;
+} mReserved[] = {
+  { KARN_UEFI_BASE,        KARN_UEFI_SIZE,             "firmware" },
+  { KARN_DTB_STORE_BASE,   KARN_DTB_STORE_SIZE,        "DTB copy" },
+  { KARN_DTB_PTR_STORE,    KARN_DTB_PTR_STORE_SIZE,    "DTB pointer" },
+  { KARN_ATF_BASE,         KARN_ATF_SIZE,              "ATF" },
+  { KARN_FB_BASE_FALLBACK, KARN_FB_RESERVE_BYTES,      "framebuffer" },
+};
+
+STATIC
+EFI_STATUS
+ReadShimDtb (
+  OUT UINT64 *DtbAddress,
+  OUT UINT32 *DtbSize
+  )
+{
+  volatile UINT64 *PointerStore;
+  volatile UINT32 *Dtb;
+  UINT64           Address;
+  UINT32           Size;
+
+  PointerStore = (volatile UINT64 *)(UINTN)KARN_DTB_PTR_STORE;
+  Address      = *PointerStore;
+  if (Address == 0) {
+    return EFI_NOT_FOUND;
+  }
+
+  Dtb = (volatile UINT32 *)(UINTN)Address;
+  if (SwapBytes32 (Dtb[0]) != FDT_MAGIC) {
+    return EFI_UNSUPPORTED;
+  }
+
+  Size = SwapBytes32 (Dtb[1]);
+  if ((Size < sizeof (UINT32) * 2) || (Size > KARN_DTB_STORE_SIZE)) {
+    return EFI_VOLUME_CORRUPTED;
+  }
+
+  *DtbAddress = Address;
+  *DtbSize    = Size;
+  return EFI_SUCCESS;
+}
+
+/**
+  Copy the parsed kernel to a buffer the allocator gave us, build boot_args and
+  hand control to it.  Returns only on failure; on success the machine is
+  running XNU with no boot services.
+
+  The destination comes from the UEFI allocator, so it cannot overlap
+  firmware, the DTB or the framebuffer; the explicit reservation checks are a
+  second line of defence for those known ranges.
+**/
+STATIC
+EFI_STATUS
+BootKernel (
+  IN EFI_HANDLE                ImageHandle,
+  IN EFI_LOADED_IMAGE_PROTOCOL *LoadedImage,
+  IN CONST XNU_IMAGE_INFO      *Info,
+  IN CONST VOID                *Image
+  )
+{
+  EFI_STATUS                    Status;
+  EFI_GRAPHICS_OUTPUT_PROTOCOL *Gop;
+  EFI_PHYSICAL_ADDRESS          DestPage;
+  EFI_PHYSICAL_ADDRESS          ArgsPage;
+  UINT64                        Span;
+  UINT64                        Entry;
+  UINT64                        DtbAddress;
+  UINT32                        DtbSize;
+  UINTN                         Pages;
+  UINTN                         Index;
+  CONST CHAR8                  *OverlapName;
+  KARNAK_BOOT_ARGS_CONFIG       Config;
+  KARNAK_HANDOFF_RANGES         Ranges;
+
+  if (!Info->HasEntry) {
+    Print (L"XnuLoader: kernel has no entry point\n");
+    return EFI_UNSUPPORTED;
+  }
+
+  if ((Info->EntryPoint < Info->ImageBase) ||
+      (Info->EntryPoint >= Info->ImageEnd))
+  {
+    Print (L"XnuLoader: entry 0x%lx is outside the image\n", Info->EntryPoint);
+    return EFI_UNSUPPORTED;
+  }
+
+  Span = Info->ImageEnd - Info->ImageBase;
+  if ((Span == 0) || (Span > MAX_UINT32)) {
+    Print (L"XnuLoader: implausible image span 0x%lx\n", Span);
+    return EFI_UNSUPPORTED;
+  }
+
+  Status = ReadShimDtb (&DtbAddress, &DtbSize);
+  if (EFI_ERROR (Status)) {
+    Print (L"XnuLoader: no usable shim DTB (%r)\n", Status);
+    return Status;
+  }
+
+  Pages  = EFI_SIZE_TO_PAGES ((UINTN)Span);
+  DestPage = 0;
+  Status = gBS->AllocatePages (AllocateAnyPages, EfiLoaderData, Pages, &DestPage);
+  if (EFI_ERROR (Status)) {
+    Print (L"XnuLoader: cannot allocate 0x%lx bytes for the kernel (%r)\n",
+           Span, Status);
+    return Status;
+  }
+
+  for (Index = 0; Index < ARRAY_SIZE (mReserved); Index++) {
+    if (XnuImageCheckPlacement (
+          Info, DestPage,
+          mReserved[Index].Base, mReserved[Index].Size,
+          &OverlapName
+          ) != EFI_SUCCESS)
+    {
+      Print (L"XnuLoader: segment %a overlaps %a at 0x%lx\n",
+             OverlapName, mReserved[Index].Name, DestPage);
+      gBS->FreePages (DestPage, Pages);
+      return EFI_ACCESS_DENIED;
+    }
+  }
+
+  ZeroMem ((VOID *)(UINTN)DestPage, Pages * EFI_PAGE_SIZE);
+  for (Index = 0; Index < Info->SegmentCount; Index++) {
+    CONST XNU_SEGMENT *Segment = &Info->Segment[Index];
+    UINT64             Destination;
+
+    if (!Segment->Loadable) {
+      continue;
+    }
+
+    Destination = (UINT64)DestPage + (Segment->VmAddr - Info->ImageBase);
+    if (Segment->FileSize != 0) {
+      CopyMem (
+        (VOID *)(UINTN)Destination,
+        (CONST UINT8 *)Image + Segment->FileOff,
+        (UINTN)Segment->FileSize
+        );
+    }
+  }
+
+  Entry = (UINT64)DestPage + (Info->EntryPoint - Info->ImageBase);
+
+  ArgsPage = 0;
+  Status   = gBS->AllocatePages (AllocateAnyPages, EfiLoaderData, 1, &ArgsPage);
+  if (EFI_ERROR (Status)) {
+    Print (L"XnuLoader: cannot allocate boot_args (%r)\n", Status);
+    gBS->FreePages (DestPage, Pages);
+    return Status;
+  }
+
+  ZeroMem ((VOID *)(UINTN)ArgsPage, EFI_PAGE_SIZE);
+
+  Gop    = NULL;
+  Status = gBS->LocateProtocol (&gEfiGraphicsOutputProtocolGuid, NULL, (VOID **)&Gop);
+  if (EFI_ERROR (Status)) {
+    Gop = NULL;
+  }
+
+  ZeroMem (&Config, sizeof (Config));
+  Config.PhysBase        = KARN_DRAM_BASE;
+  /*
+   * TODO(VERIFY_MEMSIZE): the live DRAM size should come from the memory map
+   * or the shim DTB, not the 512 MiB DTS floor.
+   */
+  Config.MemSize         = KARN_DRAM_SIZE_DTS;
+  Config.TopOfKernelData = (UINT64)DestPage + Span;
+  Config.DeviceTree      = (VOID *)(UINTN)DtbAddress;
+  Config.DeviceTreeLength = DtbSize;
+  Config.CommandLine     = "karnak xnu";
+  if (Gop != NULL) {
+    Config.Video.BaseAddress = Gop->Mode->FrameBufferBase;
+    Config.Video.RowBytes    = (UINT64)Gop->Mode->Info->PixelsPerScanLine * 4;
+    Config.Video.Width       = Gop->Mode->Info->HorizontalResolution;
+    Config.Video.Height      = Gop->Mode->Info->VerticalResolution;
+    Config.Video.Depth       = 32;
+  }
+
+  Status = KarnakBootArgsInit ((KARNAK_BOOT_ARGS *)(UINTN)ArgsPage, &Config);
+  if (EFI_ERROR (Status)) {
+    Print (L"XnuLoader: boot_args init failed (%r)\n", Status);
+    gBS->FreePages (ArgsPage, 1);
+    gBS->FreePages (DestPage, Pages);
+    return Status;
+  }
+
+  Ranges.KernelStart   = DestPage;
+  Ranges.KernelEnd     = (UINT64)DestPage + Span;
+  Ranges.BootArgsStart = ArgsPage;
+  Ranges.BootArgsEnd   = (UINT64)ArgsPage + sizeof (KARNAK_BOOT_ARGS);
+  Ranges.ImageStart    = (UINT64)(UINTN)LoadedImage->ImageBase;
+  Ranges.ImageEnd      = Ranges.ImageStart + LoadedImage->ImageSize;
+  Ranges.DtbStart      = DtbAddress;
+  Ranges.DtbEnd        = DtbAddress + DtbSize;
+
+  Print (L"XnuLoader: kernel 0x%lx..0x%lx, entry 0x%lx, args 0x%lx\n",
+         Ranges.KernelStart, Ranges.KernelEnd, Entry, (UINT64)ArgsPage);
+  Print (L"XnuLoader: EL%u; exiting boot services and handing off\n",
+         KarnakHandoffCurrentEl ());
+
+  Status = KarnakHandoffExitBootServices (ImageHandle);
+  if (EFI_ERROR (Status)) {
+    Print (L"XnuLoader: ExitBootServices failed (%r)\n", Status);
+    gBS->FreePages (ArgsPage, 1);
+    gBS->FreePages (DestPage, Pages);
+    return Status;
+  }
+
+  KarnakXnuHandoff (Entry, (UINT64)ArgsPage, &Ranges);
+  CpuDeadLoop ();
+  return EFI_ABORTED;
+}
+
 EFI_STATUS
 EFIAPI
 UefiMain (
@@ -224,12 +441,9 @@ UefiMain (
            Info.Segment[I].MaxProt, Info.Segment[I].InitProt);
   }
 
-  /* No destination is chosen yet.  When the handoff lands it calls
-     XnuImageCheckPlacement(Info, DestBase, reserved...) for every firmware
-     reservation and refuses to boot on EFI_ACCESS_DENIED. */
   PreviewBootArgs ();
 
+  Status = BootKernel (ImageHandle, LoadedImage, &Info, Image);
   FreePool (Image);
-  Print (L"XnuLoader: boot_args handoff not implemented; refusing to boot.\n");
-  return EFI_UNSUPPORTED;
+  return Status;
 }

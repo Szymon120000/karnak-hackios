@@ -47,11 +47,16 @@
   `xnu-8796.141.3` tag, copies the overlay and applies two reviewed patches;
   CI stages a real tree and re-runs the staging to prove idempotence.  The
   patches apply cleanly but have not been compiled by an XNU build yet.
-- **XnuLoader**: the Mach-O parser, a `boot_args` builder (`KarnakBootArgsLib`,
-  layout asserted against Apple's xnu-8796 arm64 header) and a validation-only
-  application exist; it prints the segment map and a `boot_args` preview from
-  the shim's DTB, then refuses to boot.  The `ExitBootServices` / MMU-off
-  handoff does not exist yet.
+- **XnuLoader**: the Mach-O parser, the `boot_args` builder (`KarnakBootArgsLib`,
+  layout asserted against Apple's xnu-8796 arm64 header), the segment copy and
+  the `ExitBootServices` / MMU-off handoff (`KarnakHandoffLib`) exist.  A
+  `\xnu\kernelcache` would now be copied to allocator-provided memory and
+  entered; no kernel built for karnak exists yet, so there is nothing to boot.
+  The loader is still not placed in the FV.
+- **UEFI exception level**: MediaTek PrePi runs at **EL2** (it sets
+  `HCR_EL2.TGE`).  `KarnakXnuHandoff` clears `TGE`/`E2H`, programs an EL1 state
+  with `SCTLR_EL1.M/C/I = 0` and returns through `ELR_EL2`/`SPSR_EL2`.  This is
+  verified on hardware (see below).
 - **Disk-backed rootfs**: the GPT container is built and tested, but the HFS+
   payload (IPSW-derived Darwin tree) and the MSDC0 block driver are missing.
 - **Touch/display panel drivers**: the panel is driven by LK; XNU framebuffer
@@ -93,6 +98,15 @@ The first on-device test is the UEFI stage only (`LK -> BootShim -> EDK2`):
   buffer-to-video squares and an 8x8 `A` glyph; the Shell clears them when it
   starts, which is expected.
   The shim's framebuffer write is BGRA8888 (opaque red is `0xFF0000FF`).
+- Verified on hardware (handoff): with `PcdKarnakHandoffSelfTest=TRUE` the
+  probe builds a real `boot_args` block at `ReadyToBoot`, calls
+  `ExitBootServices`, and branches through `KarnakXnuHandoff` to
+  `KarnakHandoffTestPayload` with the MMU and caches off.  The panel shows a
+  white top band followed by solid green, i.e. the payload ran, `boot_args`
+  was valid and the CPU was at **EL1**.  This proves the EL2 -> EL1 drop,
+  cache cleaning, MMU-off entry and direct physical framebuffer writes.  A
+  self-test build intentionally stops there (no Shell); power-cycle to
+  recover.
 - `tools/check_boot_image.py` enforces the appended DTB and the ramdisk FD for
   v0 images; `tools/test_extract_dtb.py` and `tools/test_check_boot_image.py`
   cover both layouts.

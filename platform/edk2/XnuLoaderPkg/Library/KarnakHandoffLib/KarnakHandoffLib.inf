@@ -1,0 +1,28 @@
+## @file
+#  ExitBootServices + MMU-off handoff for karnak.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = KarnakHandoffLib
+  FILE_GUID                      = D4A6E1C8-7B52-4F13-9E60-3C8A1B5D2F47
+  MODULE_TYPE                    = DXE_DRIVER
+  VERSION_STRING                 = 0.1
+  LIBRARY_CLASS                  = KarnakHandoffLib|DXE_DRIVER UEFI_APPLICATION
+
+[Sources]
+  KarnakHandoff.c
+
+[Sources.AARCH64]
+  KarnakXnuHandoff.S
+
+[Packages]
+  MdePkg/MdePkg.dec
+  XnuLoaderPkg/XnuLoaderPkg.dec
+
+[LibraryClasses]
+  BaseLib
+  MemoryAllocationLib
+  UefiBootServicesTableLib
