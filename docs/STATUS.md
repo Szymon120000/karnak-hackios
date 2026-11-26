@@ -47,7 +47,7 @@
   kernel and hardware boot in `xnu/README.md`.
 - **XNU patch series**: `scripts/stage_xnu.sh` fetches the pinned
   `xnu-8796.141.3` tag, copies the overlay (including
-  `config/MASTER.arm64.karnak`) and applies six reviewed patches; CI stages a
+  `config/MASTER.arm64.karnak`) and applies seven reviewed patches; CI stages a
   real tree and re-runs the staging to prove idempotence.  The board code
   compiles in the macOS job; a linked kernel and hardware boot are still
   pending.

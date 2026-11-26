@@ -42,6 +42,8 @@ This directory contains:
   open-source pmap/assembly path (pmap preemption/lockdown symbols, cache
   asm labels, the no-op monitor hook).  The overlay also provides the missing
   AMCC/SART/UAT/tunables no-ops and a kpc backend that reports no counters.
+  `0007` gives the 4K-page karnak kernel the iOS-style 64 GiB user VA limit,
+  which pmap's commpage nesting assert requires.
 - `include/pexpert/...` — vendored xnu-8796 arm64 `boot.h` used only by the
   host test that asserts the firmware `boot_args` layout (see the README there).
 - `tests/boot_args_test.c` — verifies `KarnakBootArgsLib` (in XnuLoaderPkg)

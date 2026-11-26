@@ -103,6 +103,7 @@ jobs:
           test -f vendor/xnu/osfmk/arm64/tunables/tunables.s
           grep -q 'pmap_pending_preemption' vendor/xnu/osfmk/arm/pmap/pmap_misc.c
           grep -q 'LEXT(clean_mmu_dcache)' vendor/xnu/osfmk/arm64/caches_asm.s
+          grep -q 'ARM64_BOARD_CONFIG_KARNAK' vendor/xnu/osfmk/mach/arm/vm_param.h
           grep -q 'KARNAK_UART' vendor/xnu/pexpert/arm/pe_serial.c
           grep -q 'karnak_early.c' vendor/xnu/pexpert/conf/files.arm64
           grep -q 'karnak_gicv2_init_cpu' vendor/xnu/pexpert/arm/pe_fiq.c
