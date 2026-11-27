@@ -328,6 +328,18 @@ BootKernel (
     Config.Video.Width       = Gop->Mode->Info->HorizontalResolution;
     Config.Video.Height      = Gop->Mode->Info->VerticalResolution;
     Config.Video.Depth       = 32;
+  } else {
+    /*
+     * No GOP at handoff time.  The panel geometry is fixed by the LK VRAM
+     * reservation (the same constants BootShim and KarnakFbDxe use), so
+     * pass them instead of leaving the kernel with a zeroed Video structure.
+     */
+    Print (L"XnuLoader: no GOP; using the LK framebuffer constants\n");
+    Config.Video.BaseAddress = KARN_FB_BASE_FALLBACK;
+    Config.Video.RowBytes    = KARN_FB_STRIDE;
+    Config.Video.Width       = KARN_FB_WIDTH;
+    Config.Video.Height      = KARN_FB_HEIGHT;
+    Config.Video.Depth       = 32;
   }
 
   Status = KarnakBootArgsInit ((KARNAK_BOOT_ARGS *)(UINTN)ArgsPage, &Config);
@@ -349,6 +361,27 @@ BootKernel (
 
   Print (L"XnuLoader: kernel 0x%lx..0x%lx, entry 0x%lx, args 0x%lx\n",
          Ranges.KernelStart, Ranges.KernelEnd, Entry, (UINT64)ArgsPage);
+  Print (L"XnuLoader: video base 0x%lx %lux%lu depth %lu stride 0x%lx\n",
+         (UINT64)Config.Video.BaseAddress,
+         (UINT64)Config.Video.Width, (UINT64)Config.Video.Height,
+         (UINT64)Config.Video.Depth, (UINT64)Config.Video.RowBytes);
+  /*
+   * Paint a magenta band low on the panel directly through the GOP base.
+   * If this shows up the physical address the kernel is given really is the
+   * visible front buffer, which separates "kernel never mapped it" from
+   * "wrong address".  Rows 900..1100 are black in the loader text screen.
+   */
+  if (Config.Video.BaseAddress != 0) {
+    volatile UINT32 *Fb = (volatile UINT32 *)(UINTN)Config.Video.BaseAddress;
+    UINTN            X;
+    UINTN            Y;
+
+    for (Y = 900; Y < 1100; Y++) {
+      for (X = 0; X < Config.Video.Width; X++) {
+        Fb[Y * (Config.Video.RowBytes / 4) + X] = 0x00FF00FF;
+      }
+    }
+  }
   Print (L"XnuLoader: EL%u; exiting boot services and handing off\n",
          KarnakHandoffCurrentEl ());
 

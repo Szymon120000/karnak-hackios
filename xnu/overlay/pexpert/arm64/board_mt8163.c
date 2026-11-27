@@ -218,9 +218,35 @@ karnak_board_early_init(boot_args *args)
 		karnak_early_puts("KARNAK: UART0 map failed; output may be lost\n");
 	}
 
-	karnak_fb_console_init((unsigned long long)(args->Video.v_baseAddr & ~3ULL),
-	    args->Video.v_rowBytes, args->Video.v_width, args->Video.v_height,
-	    args->Video.v_depth & kBootVideoDepthMask);
+	unsigned long long fb_base;
+	unsigned long long fb_stride;
+	unsigned long long fb_width;
+	unsigned long long fb_height;
+	unsigned long long fb_depth;
+
+	fb_base   = args->Video.v_baseAddr & ~3ULL;
+	fb_stride = args->Video.v_rowBytes;
+	fb_width  = args->Video.v_width;
+	fb_height = args->Video.v_height;
+	fb_depth  = args->Video.v_depth & kBootVideoDepthMask;
+	if ((fb_base == 0) || (fb_stride == 0) || (fb_width == 0) ||
+	    (fb_height == 0))
+	{
+		/*
+		 * The loader may have run without GOP.  The panel geometry is
+		 * fixed by the LK VRAM reservation and already verified by
+		 * BootShim/KarnakFbDxe, so use those constants rather than
+		 * staying silent.
+		 */
+		fb_base   = KARNAK_FB_BASE_FALLBACK;
+		fb_stride = KARNAK_FB_STRIDE;
+		fb_width  = KARNAK_FB_WIDTH;
+		fb_height = KARNAK_FB_HEIGHT;
+		fb_depth  = KARNAK_FB_BPP;
+		karnak_early_puts("KARNAK: using fallback framebuffer geometry\n");
+	}
+
+	karnak_fb_console_init(fb_base, fb_stride, fb_width, fb_height, fb_depth);
 	if (karnak_fb_is_ready()) {
 		/*
 		 * cons_ops[] gains a third entry for karnak (see
