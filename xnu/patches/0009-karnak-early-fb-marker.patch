@@ -1,42 +1,77 @@
 diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
-index e5336e5..62eabad 100644
+index e5336e5..98dea18 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -463,6 +463,37 @@ LEXT(start_first_cpu)
+@@ -447,6 +447,37 @@ start_cpu:
+ 2:
+ .endmacro
+ 
++#if defined(KARNAK)
++/*
++ * Bring-up bisection bar.  MMU and caches are off, so the panel's physical
++ * base is directly addressable.  Use the fixed karnak geometry (see
++ * include/karnak/hardware_map.h) rather than boot_args->Video, because the
++ * loader may deliberately pass no video address.  Paint 32 rows \rowback
++ * rows above the bottom with \color; distinct rows/colours mark successive
++ * points in the pre-MMU path.  Clobbers x9-x14 only, never x20-x26 or lr.
++ */
++	.macro	KARNAK_BAR rowback, color
++	MOV64		x9, 0x98800000			// KARNAK_FB_BASE_FALLBACK
++	mov		x10, #3200			// KARNAK_FB_STRIDE
++	mov		w11, #1280			// KARNAK_FB_HEIGHT
++	mov		w12, #(\rowback)
++	cmp		w11, w12
++	b.lo		99f
++	sub		w11, w11, w12			// start \rowback rows above bottom
++	umaddl		x9, w11, x10, x9
++	mov		w11, #800			// KARNAK_FB_WIDTH
++	MOV64		x12, \color
++	mov		w13, #32
++98:	mov		w14, w11
++97:	str		w12, [x9], #4
++	subs		w14, w14, #1
++	b.ne		97b
++	subs		w13, w13, #1
++	b.ne		98b
++99:
++	.endm
++#endif /* KARNAK */
++
+ /*
+  * _start_first_cpu
+  * Cold boot init routine.  Called from __start
+@@ -463,6 +494,11 @@ LEXT(start_first_cpu)
  	mov		x20, x0
  	mov		x21, #0
  
 +#if defined(KARNAK)
-+	/*
-+	 * Bring-up marker.  The MMU and caches are off and PA == VA here, so
-+	 * boot_args->Video gives a directly usable framebuffer.  Paint a
-+	 * 64-row red bar near the bottom: if it appears, __start reached
-+	 * _start_first_cpu and boot_args is intact.  The board hook clears
-+	 * the screen when the in-kernel console takes over.
-+	 */
-+	ldr		x0, [x20, #40]			// Video.v_baseAddr
-+	cbz		x0, 93f
-+	ldr		x1, [x20, #56]			// Video.v_rowBytes
-+	cbz		x1, 93f
-+	ldr		w2, [x20, #72]			// Video.v_height
-+	mov		w3, #192
-+	cmp		w2, w3
-+	b.lo		93f
-+	sub		w2, w2, w3			// start 192 rows above the bottom
-+	umaddl		x0, w2, w1, x0			// x0 = base + row * stride
-+	ldr		w4, [x20, #64]			// Video.v_width
-+	cbz		w4, 93f
-+	mov		w5, #64				// rows to fill
-+	MOV64		x6, 0xFF0000FF		// RGBA opaque red (A is the high byte)
-+91:	mov		w7, w4
-+92:	str		w6, [x0], #4		// stride == width * 4 on karnak
-+	subs		w7, w7, #1
-+	b.ne		92b
-+	subs		w5, w5, #1
-+	b.ne		91b
-+93:
++	/* M0: reached _start_first_cpu with boot_args intact. */
++	KARNAK_BAR 192, 0xFF0000FF
 +#endif /* KARNAK */
 +
  	// Set low reset vector before attempting any loads
  	adrp	x0, EXT(LowExceptionVectorBase)@page
  	add		x0, x0, EXT(LowExceptionVectorBase)@pageoff
+@@ -612,6 +648,10 @@ Lkernelcache_base_found:
+ 	/* Ensure TTEs are visible */
+ 	dsb		ish
+ 
++#if defined(KARNAK)
++	/* M1: bootstrap V=P and KVA page tables built successfully. */
++	KARNAK_BAR 256, 0xFF00FF00
++#endif /* KARNAK */
+ 
+ 	b		common_start
+ 
+@@ -740,6 +780,11 @@ common_start:
+ 	PAC_INIT_KEY_STATE tmp=x0, tmp2=x1
+ #endif /* HAS_APPLE_PAC */
+ 
++#if defined(KARNAK)
++	/* M2: about to enable the MMU (all common_start setup succeeded). */
++	KARNAK_BAR 320, 0xFFFF0000
++#endif /* KARNAK */
++
+ 	// Enable caches, MMU, ROP and JOP
+ 	MOV64   x0, SCTLR_EL1_DEFAULT
+ 	MSR_SCTLR_EL1_X0

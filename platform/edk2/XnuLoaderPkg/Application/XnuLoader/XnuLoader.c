@@ -348,10 +348,12 @@ BootKernel (
   EFI_GRAPHICS_OUTPUT_PROTOCOL *Gop;
   EFI_PHYSICAL_ADDRESS          DestPage;
   EFI_PHYSICAL_ADDRESS          ArgsPage;
+  EFI_PHYSICAL_ADDRESS          DtbCopy;
   UINT64                        Span;
   UINT64                        Entry;
   UINT64                        DtbAddress;
   UINT32                        DtbSize;
+  UINTN                         DtbPages;
   UINT64                        DramBase;
   UINT64                        DramSize;
   UINT64                        DramEnd;
@@ -386,15 +388,19 @@ BootKernel (
     return Status;
   }
 
-  Pages  = EFI_SIZE_TO_PAGES ((UINTN)Span);
+  Pages    = EFI_SIZE_TO_PAGES ((UINTN)Span);
+  DtbPages = EFI_SIZE_TO_PAGES ((UINTN)DtbSize);
   DestPage = 0;
   /*
-   * Reserve one extra page for boot_args so it stays inside the contiguous
-   * physical range that XNU maps as kernel data; a separately allocated page
-   * can land below physBase and never be mapped.
+   * Keep boot_args and a private copy of the DTB in the same contiguous
+   * physical range as the kernel.  start.s only maps [physBase,
+   * physBase+memSize), and LK places the source DTB at 0x4FE00000, below the
+   * kernel allocation; SecureDTInit() runs under the MMU and would fault on
+   * an unmapped address.  Copying it here also means the address we hand
+   * XNU lies inside the range it maps for kernel data.
    */
-  Status = gBS->AllocatePages (AllocateAnyPages, EfiLoaderData, Pages + 1,
-              &DestPage);
+  Status = gBS->AllocatePages (AllocateAnyPages, EfiLoaderData,
+              Pages + 1 + DtbPages, &DestPage);
   if (EFI_ERROR (Status)) {
     Print (L"XnuLoader: cannot allocate 0x%lx bytes for the kernel (%r)\n",
            Span, Status);
@@ -410,7 +416,7 @@ BootKernel (
     {
       Print (L"XnuLoader: segment %a overlaps %a at 0x%lx\n",
              OverlapName, mReserved[Index].Name, DestPage);
-      gBS->FreePages (DestPage, Pages + 1);
+      gBS->FreePages (DestPage, Pages + 1 + DtbPages);
       return EFI_ACCESS_DENIED;
     }
   }
@@ -438,6 +444,9 @@ BootKernel (
 
   ArgsPage = DestPage + Pages * EFI_PAGE_SIZE;
   ZeroMem ((VOID *)(UINTN)ArgsPage, EFI_PAGE_SIZE);
+  DtbCopy = ArgsPage + EFI_PAGE_SIZE;
+  ZeroMem ((VOID *)(UINTN)DtbCopy, (UINTN)DtbPages * EFI_PAGE_SIZE);
+  CopyMem ((VOID *)(UINTN)DtbCopy, (CONST VOID *)(UINTN)DtbAddress, DtbSize);
 
   Gop    = NULL;
   Status = gBS->LocateProtocol (&gEfiGraphicsOutputProtocolGuid, NULL, (VOID **)&Gop);
@@ -461,13 +470,14 @@ BootKernel (
            DramBase, DramSize);
   }
   DramEnd = DramBase + DramSize;
-  /* Never let a stale DTB cut off the image or its boot_args page. */
-  if (DramEnd < ((UINT64)DestPage + (Pages + 1) * EFI_PAGE_SIZE)) {
-    DramEnd = (UINT64)DestPage + (Pages + 1) * EFI_PAGE_SIZE;
+  /* Never let a stale DTB cut off the image, boot_args or the DTB copy. */
+  if (DramEnd < ((UINT64)DestPage +
+                 (Pages + 1 + DtbPages) * EFI_PAGE_SIZE)) {
+    DramEnd = (UINT64)DestPage + (Pages + 1 + DtbPages) * EFI_PAGE_SIZE;
   }
   if (DramEnd <= (UINT64)DestPage) {
     Print (L"XnuLoader: DRAM ends below the kernel load address\n");
-    gBS->FreePages (DestPage, Pages + 1);
+    gBS->FreePages (DestPage, Pages + 1 + DtbPages);
     return EFI_ABORTED;
   }
   MemSize = (DramEnd - (UINT64)DestPage) & ~((UINT64)EFI_PAGE_SIZE - 1);
@@ -476,8 +486,15 @@ BootKernel (
   Config.VirtBase        = Info->ImageBase;
   Config.PhysBase        = (UINT64)DestPage;
   Config.MemSize         = MemSize;
-  Config.TopOfKernelData = (UINT64)ArgsPage + EFI_PAGE_SIZE;
-  Config.DeviceTree      = (VOID *)(UINTN)DtbAddress;
+  Config.TopOfKernelData = (UINT64)DtbCopy + (UINT64)DtbPages * EFI_PAGE_SIZE;
+  /*
+   * Apple hands over a virtual address in the kernel's boot mapping.  The
+   * DTB copy lives at DestPage + offset, which start.s maps at
+   * virtBase + offset; use that rather than the physical address so the
+   * pointer survives arm_vm_init()'s switch to the final kernel pmap.
+   */
+  Config.DeviceTree      = (VOID *)(UINTN)((UINT64)Info->ImageBase +
+                            ((UINT64)DtbCopy - (UINT64)DestPage));
   Config.DeviceTreeLength = DtbSize;
   Config.CommandLine     = "karnak xnu";
   if (Gop != NULL) {
@@ -499,11 +516,23 @@ BootKernel (
     Config.Video.Height      = KARN_FB_HEIGHT;
     Config.Video.Depth       = 32;
   }
+  /*
+   * XNU runs the built-in video console from PE_create_console() before our
+   * board hook gets a chance to run.  initialize_screen() only treats
+   * v_baseAddr as a physical address when bit 0 is set; an even physical
+   * address is used verbatim as a virtual address, and 0x98800000 is not
+   * mapped in the kernel VA space, so the first console write faults.
+   *
+   * Hand over no video address for now: the board hook owns the panel and
+   * maps it after the VM is up.  Keep the geometry so the hook can fall back
+   * to the known LK values.
+   */
+  Config.Video.BaseAddress = 0;
 
   Status = KarnakBootArgsInit ((KARNAK_BOOT_ARGS *)(UINTN)ArgsPage, &Config);
   if (EFI_ERROR (Status)) {
     Print (L"XnuLoader: boot_args init failed (%r)\n", Status);
-    gBS->FreePages (DestPage, Pages + 1);
+    gBS->FreePages (DestPage, Pages + 1 + DtbPages);
     return Status;
   }
 
@@ -513,11 +542,13 @@ BootKernel (
   Ranges.BootArgsEnd   = (UINT64)ArgsPage + sizeof (KARNAK_BOOT_ARGS);
   Ranges.ImageStart    = (UINT64)(UINTN)LoadedImage->ImageBase;
   Ranges.ImageEnd      = Ranges.ImageStart + LoadedImage->ImageSize;
-  Ranges.DtbStart      = DtbAddress;
-  Ranges.DtbEnd        = DtbAddress + DtbSize;
+  Ranges.DtbStart      = DtbCopy;
+  Ranges.DtbEnd        = (UINT64)DtbCopy + DtbSize;
 
   Print (L"XnuLoader: kernel 0x%lx..0x%lx, entry 0x%lx, args 0x%lx\n",
          Ranges.KernelStart, Ranges.KernelEnd, Entry, (UINT64)ArgsPage);
+  Print (L"XnuLoader: dtb copy 0x%lx -> va 0x%lx (%lu bytes)\n",
+         (UINT64)DtbCopy, (UINT64)(UINTN)Config.DeviceTree, (UINT64)DtbSize);
   Print (L"XnuLoader: video base 0x%lx %lux%lu depth %lu stride 0x%lx\n",
          (UINT64)Config.Video.BaseAddress,
          (UINT64)Config.Video.Width, (UINT64)Config.Video.Height,
@@ -546,7 +577,7 @@ BootKernel (
   Status = KarnakHandoffExitBootServices (ImageHandle);
   if (EFI_ERROR (Status)) {
     Print (L"XnuLoader: ExitBootServices failed (%r)\n", Status);
-    gBS->FreePages (DestPage, Pages + 1);
+    gBS->FreePages (DestPage, Pages + 1 + DtbPages);
     return Status;
   }
 
