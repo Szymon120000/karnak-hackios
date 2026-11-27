@@ -1,8 +1,8 @@
 diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
-index e5336e5..97c3d9f 100644
+index e5336e5..c1af2da 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -447,6 +447,37 @@ start_cpu:
+@@ -447,6 +447,74 @@ start_cpu:
  2:
  .endmacro
  
@@ -35,12 +35,49 @@ index e5336e5..97c3d9f 100644
 +	b.ne		98b
 +99:
 +	.endm
++
++/*
++ * Identity-map the first 8 MiB of the panel's physical framebuffer so the
++ * post-MMU markers can still write to it.  The bootstrap V=P window only
++ * covers DRAM from the kernel base upward, and the panel sits at 0x98800000.
++ * Use Device-nGnRnE (uncached) so the pixels reach DRAM without a cache
++ * clean; arm_replace_identity_map() wipes this mapping later, which is fine.
++ * Clobbers x0, x2, x10-x13.  Expects x1 = V=P L1 table, x2 = free PT page.
++ */
++	.macro	KARNAK_MAP_FB
++	MOV64		x0, 0x98800000			// KARNAK_FB_BASE_FALLBACK
++	add		x2, x2, PGBYTES			// new L2 page
++	mov		x11, #(ARM_TTE_BOOT_TABLE)
++	and		x12, x2, #(ARM_TTE_TABLE_MASK)
++	orr		x11, x11, x12
++	and		x10, x0, #(ARM_TT_L1_INDEX_MASK)
++	lsr		x10, x10, #(ARM_TT_L1_SHIFT)
++	lsl		x10, x10, #(TTE_SHIFT)
++	add		x10, x1, x10
++	str		x11, [x10]
++	and		x10, x0, #(ARM_TT_L2_INDEX_MASK)
++	lsr		x10, x10, #(ARM_TT_L2_SHIFT)
++	lsl		x10, x10, #(TTE_SHIFT)
++	add		x10, x2, x10
++	mov		x11, #(ARM_TTE_TYPE_BLOCK)
++	orr		x11, x11, #(ARM_TTE_VALID)
++	orr		x11, x11, #(ARM_TTE_BLOCK_ATTRINDX(CACHE_ATTRINDX_DISABLE))
++	orr		x11, x11, #(ARM_TTE_BLOCK_AF)
++	and		x12, x0, #(ARM_TTE_BLOCK_L2_MASK)
++	orr		x11, x11, x12
++	mov		x13, #4				// 4 x 2 MiB blocks
++1:	str		x11, [x10], #(1 << TTE_SHIFT)
++	add		x11, x11, #(ARM_TT_L2_SIZE)
++	subs		x13, x13, #1
++	b.ne		1b
++	dsb		ish
++	.endm
 +#endif /* KARNAK */
 +
  /*
   * _start_first_cpu
   * Cold boot init routine.  Called from __start
-@@ -463,6 +494,11 @@ LEXT(start_first_cpu)
+@@ -463,6 +531,11 @@ LEXT(start_first_cpu)
  	mov		x20, x0
  	mov		x21, #0
  
@@ -52,18 +89,20 @@ index e5336e5..97c3d9f 100644
  	// Set low reset vector before attempting any loads
  	adrp	x0, EXT(LowExceptionVectorBase)@page
  	add		x0, x0, EXT(LowExceptionVectorBase)@pageoff
-@@ -612,6 +648,10 @@ Lkernelcache_base_found:
+@@ -612,6 +685,12 @@ Lkernelcache_base_found:
  	/* Ensure TTEs are visible */
  	dsb		ish
  
 +#if defined(KARNAK)
 +	/* M1: bootstrap V=P and KVA page tables built successfully. */
 +	KARNAK_BAR 256, 0xFF00FF00
++	/* Add an identity window for the panel so later markers can draw. */
++	KARNAK_MAP_FB
 +#endif /* KARNAK */
  
  	b		common_start
  
-@@ -740,6 +780,11 @@ common_start:
+@@ -740,11 +819,21 @@ common_start:
  	PAC_INIT_KEY_STATE tmp=x0, tmp2=x1
  #endif /* HAS_APPLE_PAC */
  
@@ -75,3 +114,25 @@ index e5336e5..97c3d9f 100644
  	// Enable caches, MMU, ROP and JOP
  	MOV64   x0, SCTLR_EL1_DEFAULT
  	MSR_SCTLR_EL1_X0
+ 	isb		sy
+ 
++#if defined(KARNAK)
++	/* M3: the MMU is on and this instruction ran from the identity map. */
++	KARNAK_BAR 384, 0xFFFF00FF
++#endif /* KARNAK */
++
+ #if !VMAPPLE
+ 	MOV64   x1, SCTLR_EL1_DEFAULT
+ 	cmp		x0, x1
+@@ -807,6 +896,11 @@ common_start:
+ 	mov	lr, x21
+ #endif
+ 
++#if defined(KARNAK)
++	/* M4: common_start completed; about to return to arm_init(). */
++	KARNAK_BAR 448, 0xFFFFFF00
++#endif /* KARNAK */
++
+ 	// Return to arm_init()
+ 	ret
+ 
