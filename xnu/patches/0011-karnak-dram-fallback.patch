@@ -1,0 +1,36 @@
+diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
+index e26a1d7..c81f391 100644
+--- a/osfmk/arm/arm_init.c
++++ b/osfmk/arm/arm_init.c
+@@ -624,17 +624,22 @@ arm_init(
+ 		panic("%s: Unable to find 'chosen' DT node", __FUNCTION__);
+ 	}
+ 
+-	if (SecureDTGetProperty(chosen, "dram-base", (void const **)&dram_base, &dt_entry_size) != kSuccess) {
+-		panic("%s: Unable to find 'dram-base' entry in the 'chosen' DT node", __FUNCTION__);
+-	}
+-
+-	if (SecureDTGetProperty(chosen, "dram-size", (void const **)&dram_size, &dt_entry_size) != kSuccess) {
+-		panic("%s: Unable to find 'dram-size' entry in the 'chosen' DT node", __FUNCTION__);
++	if ((SecureDTGetProperty(chosen, "dram-base", (void const **)&dram_base,
++	    &dt_entry_size) != kSuccess) ||
++	    (SecureDTGetProperty(chosen, "dram-size", (void const **)&dram_size,
++	    &dt_entry_size) != kSuccess)) {
++		/*
++		 * karnak: LK's device tree has no Apple-style /chosen DRAM
++		 * properties.  XnuLoader passes the same range in boot_args,
++		 * so use that instead of panicking.
++		 */
++		gDramBase = args->physBase;
++		gDramSize = args->memSize;
++	} else {
++		gDramBase = *dram_base;
++		gDramSize = *dram_size;
+ 	}
+ 
+-	gDramBase = *dram_base;
+-	gDramSize = *dram_size;
+-
+ 	/*
+ 	 * Initialize the stack protector for all future calls
+ 	 * to C code. Since kernel_bootstrap() eventually

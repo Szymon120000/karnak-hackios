@@ -53,7 +53,8 @@ typedef struct {
   Inputs that the loader owns.  Anything not listed here is derived.
 **/
 typedef struct {
-  UINT64              PhysBase;
+  UINT64              VirtBase;        /* linked image base, high KVA */
+  UINT64              PhysBase;        /* physical base of that image */
   UINT64              MemSize;
   UINT64              TopOfKernelData;
   UINT64              MemSizeActual;   /* 0 = unknown, same as MemSize */

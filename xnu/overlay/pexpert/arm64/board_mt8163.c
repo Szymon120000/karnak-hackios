@@ -62,8 +62,12 @@ extern unsigned char iso_font[256 * 16];
 
 #define KARNAK_FB_COLS   100U   /* 800 / 8  */
 #define KARNAK_FB_ROWS    80U   /* 1280 / 16 */
-#define KARNAK_FB_FG     0x00FFFFFFU
-#define KARNAK_FB_BG     0x00000000U
+/*
+ * The panel layer is RGBA, not XRGB: if the last byte is zero the pixel is
+ * transparent and the text disappears regardless of the RGB value.
+ */
+#define KARNAK_FB_FG     0xFFFFFFFFU
+#define KARNAK_FB_BG     0xFF000000U
 
 static volatile unsigned int *karnak_fb;
 static unsigned long karnak_fb_stride_px;
@@ -208,6 +212,25 @@ void
 karnak_board_early_init(boot_args *args)
 {
 	vm_offset_t uart;
+
+	/*
+	 * PE_init_platform(TRUE) is called more than once: arm_init() passes
+	 * &BootCpuData and arm_init_cpu() passes NULL, so the argument is not
+	 * a boot_args pointer.  PE_state.bootArgs is the real one saved by the
+	 * first PE_init_platform(FALSE) call.
+	 */
+	if (PE_state.bootArgs != NULL) {
+		args = (boot_args *)PE_state.bootArgs;
+	}
+	if (args == NULL) {
+		return;
+	}
+
+	/* Re-entrant calls only need to keep the console selected. */
+	if (karnak_fb != NULL) {
+		cons_ops_index = 2;
+		return;
+	}
 
 	karnak_early_puts("KARNAK: XNU arm64 start (MT8163, Cortex-A53 x4)\n");
 

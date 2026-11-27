@@ -195,6 +195,137 @@ ReadShimDtb (
   return EFI_SUCCESS;
 }
 
+STATIC
+UINT64
+FdtReadBe (
+  IN CONST UINT8 *Value,
+  IN UINTN        Bytes
+  )
+{
+  UINT64 Result = 0;
+
+  while (Bytes-- != 0) {
+    Result = (Result << 8) | *Value++;
+  }
+  return Result;
+}
+
+/**
+  Pick the largest `/memory@...` reg range out of the live device tree.
+
+  XNU wants physBase/memSize to span real DRAM, so the size must come from the
+  runtime blob (LK patches it for the 1.5 GiB product) rather than the 512 MiB
+  DTS floor.  Returns FALSE when the structure is not understood and lets the
+  caller fall back to the product constant.
+**/
+STATIC
+BOOLEAN
+KarnakFdtMemoryRange (
+  IN  UINT64  DtbAddress,
+  IN  UINT32  DtbSize,
+  OUT UINT64 *Base,
+  OUT UINT64 *Size
+  )
+{
+  CONST UINT8 *Dtb       = (CONST UINT8 *)(UINTN)DtbAddress;
+  UINT32       StructOff;
+  UINT32       StructEnd;
+  UINT32       StringsOff;
+  UINT32       StructSize;
+  UINT32       Pos;
+  UINTN        Depth;
+  BOOLEAN      InMemory;
+  BOOLEAN      Found;
+
+  if ((Dtb == NULL) || (DtbSize < 40) || (FdtReadBe (Dtb, 4) != FDT_MAGIC)) {
+    return FALSE;
+  }
+
+  StructOff  = (UINT32)FdtReadBe (Dtb + 8, 4);
+  StringsOff = (UINT32)FdtReadBe (Dtb + 12, 4);
+  StructSize = (UINT32)FdtReadBe (Dtb + 36, 4);
+  if ((StructOff >= DtbSize) || (StringsOff >= DtbSize) || (StructSize == 0)) {
+    return FALSE;
+  }
+  if ((StructOff + StructSize) > DtbSize) {
+    StructEnd = DtbSize;
+  } else {
+    StructEnd = StructOff + StructSize;
+  }
+
+  Pos      = StructOff;
+  Depth    = 0;
+  InMemory = FALSE;
+  Found    = FALSE;
+
+  while ((Pos + 4) <= StructEnd) {
+    UINT32 Token = (UINT32)FdtReadBe (Dtb + Pos, 4);
+    Pos += 4;
+
+    if (Token == 0x1) { /* FDT_BEGIN_NODE */
+      CONST CHAR8 *Name = (CONST CHAR8 *)(Dtb + Pos);
+      UINTN        Len  = 0;
+
+      while (((Pos + Len) < StructEnd) && (Name[Len] != '\0')) {
+        Len++;
+      }
+      Depth++;
+      InMemory = ((Depth == 1) && (Len >= 6) &&
+                  (CompareMem (Name, "memory", 6) == 0));
+      Pos += Len + 1;
+    } else if (Token == 0x2) { /* FDT_END_NODE */
+      if (Depth != 0) {
+        Depth--;
+      }
+      InMemory = FALSE;
+    } else if (Token == 0x3) { /* FDT_PROP */
+      UINT32       PropLen;
+      UINT32       NameOff;
+      CONST CHAR8 *PropName;
+
+      if ((Pos + 8) > StructEnd) {
+        break;
+      }
+      PropLen = (UINT32)FdtReadBe (Dtb + Pos, 4);
+      NameOff = (UINT32)FdtReadBe (Dtb + Pos + 4, 4);
+      Pos    += 8;
+
+      if (((UINT64)StringsOff + NameOff + 1) > DtbSize) {
+        break;
+      }
+      PropName = (CONST CHAR8 *)(Dtb + StringsOff + NameOff);
+
+      if (InMemory && (AsciiStrCmp (PropName, "reg") == 0) &&
+          ((Pos + PropLen) <= StructEnd))
+      {
+        UINT64 CandidateBase = 0;
+        UINT64 CandidateSize = 0;
+
+        if (PropLen >= 16) {
+          CandidateBase = FdtReadBe (Dtb + Pos, 8);
+          CandidateSize = FdtReadBe (Dtb + Pos + 8, 8);
+        } else if (PropLen == 8) {
+          CandidateBase = FdtReadBe (Dtb + Pos, 4);
+          CandidateSize = FdtReadBe (Dtb + Pos + 4, 4);
+        }
+
+        if ((CandidateSize != 0) && (!Found || (CandidateSize > *Size))) {
+          *Base  = CandidateBase;
+          *Size  = CandidateSize;
+          Found  = TRUE;
+        }
+      }
+      Pos += PropLen;
+    } else if (Token == 0x4) { /* FDT_NOP */
+      continue;
+    } else {
+      break; /* FDT_END or corrupt */
+    }
+  }
+
+  return Found;
+}
+
 /**
   Copy the parsed kernel to a buffer the allocator gave us, build boot_args and
   hand control to it.  Returns only on failure; on success the machine is
@@ -221,6 +352,10 @@ BootKernel (
   UINT64                        Entry;
   UINT64                        DtbAddress;
   UINT32                        DtbSize;
+  UINT64                        DramBase;
+  UINT64                        DramSize;
+  UINT64                        DramEnd;
+  UINT64                        MemSize;
   UINTN                         Pages;
   UINTN                         Index;
   CONST CHAR8                  *OverlapName;
@@ -253,7 +388,13 @@ BootKernel (
 
   Pages  = EFI_SIZE_TO_PAGES ((UINTN)Span);
   DestPage = 0;
-  Status = gBS->AllocatePages (AllocateAnyPages, EfiLoaderData, Pages, &DestPage);
+  /*
+   * Reserve one extra page for boot_args so it stays inside the contiguous
+   * physical range that XNU maps as kernel data; a separately allocated page
+   * can land below physBase and never be mapped.
+   */
+  Status = gBS->AllocatePages (AllocateAnyPages, EfiLoaderData, Pages + 1,
+              &DestPage);
   if (EFI_ERROR (Status)) {
     Print (L"XnuLoader: cannot allocate 0x%lx bytes for the kernel (%r)\n",
            Span, Status);
@@ -269,7 +410,7 @@ BootKernel (
     {
       Print (L"XnuLoader: segment %a overlaps %a at 0x%lx\n",
              OverlapName, mReserved[Index].Name, DestPage);
-      gBS->FreePages (DestPage, Pages);
+      gBS->FreePages (DestPage, Pages + 1);
       return EFI_ACCESS_DENIED;
     }
   }
@@ -295,14 +436,7 @@ BootKernel (
 
   Entry = (UINT64)DestPage + (Info->EntryPoint - Info->ImageBase);
 
-  ArgsPage = 0;
-  Status   = gBS->AllocatePages (AllocateAnyPages, EfiLoaderData, 1, &ArgsPage);
-  if (EFI_ERROR (Status)) {
-    Print (L"XnuLoader: cannot allocate boot_args (%r)\n", Status);
-    gBS->FreePages (DestPage, Pages);
-    return Status;
-  }
-
+  ArgsPage = DestPage + Pages * EFI_PAGE_SIZE;
   ZeroMem ((VOID *)(UINTN)ArgsPage, EFI_PAGE_SIZE);
 
   Gop    = NULL;
@@ -311,14 +445,38 @@ BootKernel (
     Gop = NULL;
   }
 
-  ZeroMem (&Config, sizeof (Config));
-  Config.PhysBase        = KARN_DRAM_BASE;
   /*
-   * TODO(VERIFY_MEMSIZE): the live DRAM size should come from the memory map
-   * or the shim DTB, not the 512 MiB DTS floor.
+   * XNU treats [physBase, physBase+memSize) as the memory it manages and
+   * maps it at virtBase.  physBase must therefore be the physical location
+   * the image was copied to, and virtBase the address the Mach-O was linked
+   * at; otherwise start.s builds the KVA mapping at the wrong address and
+   * the first absolute reference faults.
    */
-  Config.MemSize         = KARN_DRAM_SIZE_DTS;
-  Config.TopOfKernelData = (UINT64)DestPage + Span;
+  DramBase = KARN_DRAM_BASE;
+  DramSize = KARN_DRAM_SIZE_PRODUCT;
+  if (KarnakFdtMemoryRange (DtbAddress, DtbSize, &DramBase, &DramSize)) {
+    Print (L"XnuLoader: DRAM 0x%lx + 0x%lx (live DTB)\n", DramBase, DramSize);
+  } else {
+    Print (L"XnuLoader: DRAM 0x%lx + 0x%lx (product default)\n",
+           DramBase, DramSize);
+  }
+  DramEnd = DramBase + DramSize;
+  /* Never let a stale DTB cut off the image or its boot_args page. */
+  if (DramEnd < ((UINT64)DestPage + (Pages + 1) * EFI_PAGE_SIZE)) {
+    DramEnd = (UINT64)DestPage + (Pages + 1) * EFI_PAGE_SIZE;
+  }
+  if (DramEnd <= (UINT64)DestPage) {
+    Print (L"XnuLoader: DRAM ends below the kernel load address\n");
+    gBS->FreePages (DestPage, Pages + 1);
+    return EFI_ABORTED;
+  }
+  MemSize = (DramEnd - (UINT64)DestPage) & ~((UINT64)EFI_PAGE_SIZE - 1);
+
+  ZeroMem (&Config, sizeof (Config));
+  Config.VirtBase        = Info->ImageBase;
+  Config.PhysBase        = (UINT64)DestPage;
+  Config.MemSize         = MemSize;
+  Config.TopOfKernelData = (UINT64)ArgsPage + EFI_PAGE_SIZE;
   Config.DeviceTree      = (VOID *)(UINTN)DtbAddress;
   Config.DeviceTreeLength = DtbSize;
   Config.CommandLine     = "karnak xnu";
@@ -345,13 +503,12 @@ BootKernel (
   Status = KarnakBootArgsInit ((KARNAK_BOOT_ARGS *)(UINTN)ArgsPage, &Config);
   if (EFI_ERROR (Status)) {
     Print (L"XnuLoader: boot_args init failed (%r)\n", Status);
-    gBS->FreePages (ArgsPage, 1);
-    gBS->FreePages (DestPage, Pages);
+    gBS->FreePages (DestPage, Pages + 1);
     return Status;
   }
 
   Ranges.KernelStart   = DestPage;
-  Ranges.KernelEnd     = (UINT64)DestPage + Span;
+  Ranges.KernelEnd     = (UINT64)DestPage + (Pages + 1) * EFI_PAGE_SIZE;
   Ranges.BootArgsStart = ArgsPage;
   Ranges.BootArgsEnd   = (UINT64)ArgsPage + sizeof (KARNAK_BOOT_ARGS);
   Ranges.ImageStart    = (UINT64)(UINTN)LoadedImage->ImageBase;
@@ -378,7 +535,8 @@ BootKernel (
 
     for (Y = 900; Y < 1100; Y++) {
       for (X = 0; X < Config.Video.Width; X++) {
-        Fb[Y * (Config.Video.RowBytes / 4) + X] = 0x00FF00FF;
+        /* RGBA: the high byte must be 0xFF or the band is transparent. */
+        Fb[Y * (Config.Video.RowBytes / 4) + X] = 0xFFFF00FF;
       }
     }
   }
@@ -388,8 +546,7 @@ BootKernel (
   Status = KarnakHandoffExitBootServices (ImageHandle);
   if (EFI_ERROR (Status)) {
     Print (L"XnuLoader: ExitBootServices failed (%r)\n", Status);
-    gBS->FreePages (ArgsPage, 1);
-    gBS->FreePages (DestPage, Pages);
+    gBS->FreePages (DestPage, Pages + 1);
     return Status;
   }
 

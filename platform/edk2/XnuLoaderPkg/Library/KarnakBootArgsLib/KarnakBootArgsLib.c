@@ -60,7 +60,14 @@ KarnakBootArgsInit (
 
   Args->Revision         = KARNAK_BOOT_ARGS_REVISION;
   Args->Version          = KARNAK_BOOT_ARGS_VERSION;
-  Args->VirtBase         = 0;   /* unused on arm64; XNU rebases from PhysBase */
+  /*
+   * On arm64 these are the linked virtual base and the physical base the
+   * image was copied to.  osfmk/arm64/start.s rebases its KVA mapping with
+   * them and arm_vm_init() sets gVirtBase/gPhysBase directly from them, so
+   * leaving VirtBase at zero makes the kernel run at low physical addresses
+   * where none of its absolute references are mapped.
+   */
+  Args->VirtBase         = Config->VirtBase;
   Args->PhysBase         = Config->PhysBase;
   Args->MemSize          = Config->MemSize;
   Args->TopOfKernelData  = Config->TopOfKernelData;
