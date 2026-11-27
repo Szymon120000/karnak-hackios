@@ -1,49 +1,40 @@
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -511,6 +511,22 @@
+@@ -463,6 +463,37 @@
  	mov		x20, x0
  	mov		x21, #0
  
 +#if defined(KARNAK)
 +	/*
-+	 * Bring-up marker: the loader enters here with the MMU and caches off,
-+	 * so boot_args->Video.v_baseAddr is directly usable.  A 64-pixel bar in
-+	 * the top-left corner proves the branch into XNU executed.
++	 * Bring-up marker.  The MMU and caches are off and PA == VA here, so
++	 * boot_args->Video gives a directly usable framebuffer.  Paint a
++	 * 64-row red bar near the bottom: if it appears, __start reached
++	 * _start_first_cpu and boot_args is intact.  The board hook clears
++	 * the screen when the in-kernel console takes over.
 +	 */
-+	ldr		x0, [x20, #40]			// boot_args->Video.v_baseAddr
-+	cbz		x0, 9f
-+	mov		w1, #0xff
-+	mov		w2, #64
-+8:	str		w1, [x0], #4
-+	subs		w2, w2, #1
-+	b.ne		8b
-+9:
++	ldr		x0, [x20, #40]			// Video.v_baseAddr
++	cbz		x0, 93f
++	ldr		x1, [x20, #56]			// Video.v_rowBytes
++	cbz		x1, 93f
++	ldr		w2, [x20, #72]			// Video.v_height
++	mov		w3, #192
++	cmp		w2, w3
++	b.lo		93f
++	sub		w2, w2, w3			// start 192 rows above the bottom
++	umaddl		x0, w2, w1, x0			// x0 = base + row * stride
++	ldr		w4, [x20, #64]			// Video.v_width
++	cbz		w4, 93f
++	mov		w5, #64				// rows to fill
++	mov		w6, #0x00ff0000		// opaque red
++91:	mov		w7, w4
++92:	str		w6, [x0], #4		// stride == width * 4 on karnak
++	subs		w7, w7, #1
++	b.ne		92b
++	subs		w5, w5, #1
++	b.ne		91b
++93:
 +#endif /* KARNAK */
 +
  	// Set low reset vector before attempting any loads
  	adrp	x0, EXT(LowExceptionVectorBase)@page
  	add		x0, x0, EXT(LowExceptionVectorBase)@pageoff
-@@ -788,6 +804,23 @@
- 	PAC_INIT_KEY_STATE tmp=x0, tmp2=x1
- #endif /* HAS_APPLE_PAC */
- 
-+#if defined(KARNAK)
-+	/*
-+	 * Second bring-up marker: reached the end of the MMU bootstrap setup.
-+	 * It is drawn a little further along the top row so the two stages are
-+	 * distinguishable in a photo.
-+	 */
-+	ldr		x0, [x20, #40]
-+	cbz		x0, 9f
-+	add		x0, x0, #0x100
-+	mov		w1, #0xff00
-+	mov		w2, #64
-+8:	str		w1, [x0], #4
-+	subs		w2, w2, #1
-+	b.ne		8b
-+9:
-+#endif /* KARNAK */
-+
- 	// Enable caches, MMU, ROP and JOP
- 	MOV64   x0, SCTLR_EL1_DEFAULT
- 	MSR_SCTLR_EL1_X0
